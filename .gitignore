@@ -3,3 +3,6 @@ build
 
 # bubbletea
 debug.log
+
+# docker
+volume

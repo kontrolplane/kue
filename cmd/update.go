@@ -13,22 +13,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Handle window resizes by updating the width and height in the model.
 	case tea.WindowSizeMsg:
-		m.Width = msg.Width
-		m.Height = msg.Height
+		m.width = msg.Width
+		m.height = msg.Height
 
 	// Handle key presses, these are shown at the bottom of the view.
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, m.Keys.Up):
-		case key.Matches(msg, m.Keys.Down):
-		case key.Matches(msg, m.Keys.Left):
-		case key.Matches(msg, m.Keys.Right):
-		case key.Matches(msg, m.Keys.Select):
-		case key.Matches(msg, m.Keys.View):
+		case key.Matches(msg, m.keys.Up):
+		case key.Matches(msg, m.keys.Down):
+		case key.Matches(msg, m.keys.Left):
+		case key.Matches(msg, m.keys.Right):
+		case key.Matches(msg, m.keys.Select):
+		case key.Matches(msg, m.keys.View):
 
-		case key.Matches(msg, m.Keys.Help):
-			m.Help.ShowAll = !m.Help.ShowAll
-		case key.Matches(msg, m.Keys.Quit):
+		case key.Matches(msg, m.keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
+		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		}
 	}

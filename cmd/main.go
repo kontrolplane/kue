@@ -22,10 +22,10 @@ func Execute() {
 
 	// Initialize the model
 	m := model{
-		Keys: keys,
-		Help: help.New(),
-
-		Selected: make(map[int]struct{}),
+		cursor:   0,
+		keys:     keys,
+		help:     help.New(),
+		selected: make(map[int]struct{}),
 	}
 
 	// Setup debug logging to file

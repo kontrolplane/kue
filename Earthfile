@@ -21,6 +21,16 @@ container:
     ARG tag="latest"
     SAVE IMAGE ghcr.io/kontrolplane/northernlights:${tag}
 
+resources:
+    LOCALLY
+    ARG AWS_ENDPOINT_URL="http://localhost:4566"
+    RUN aws sqs create-queue --queue-name northernlights-kue
+
+list:
+    LOCALLY
+    ARG AWS_ENDPOINT_URL="http://localhost:4566"
+    RUN aws sqs list-queues
+
 all:
   BUILD +compile
   BUILD +container

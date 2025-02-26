@@ -8,13 +8,15 @@ import (
 // rendered after every Update.
 func (m model) View() string {
 
-	var c string
+	var h string = "northernlights/kue"
+	var c string = "content"
+	var f string = m.help.View(m.keys)
 
 	content := lipgloss.NewStyle().
-		Width(m.Width).
-		Height(m.Height).
+		Width(m.width).
+		Height(m.height).
 		Align(lipgloss.Center, lipgloss.Center).
-		Render(c)
+		Render(h + "\n\n" + c + "\n\n" + f)
 
 	return lipgloss.JoinVertical(lipgloss.Top, content)
 }

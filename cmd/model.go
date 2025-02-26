@@ -13,17 +13,12 @@ const (
 )
 
 type model struct {
-	Cursor int
-
-	Width  int
-	Height int
-
-	Keys keyMap
-	Help help.Model
-
-	Table table.Model
-
-	State view
-
-	Selected map[int]struct{}
+	cursor   int
+	width    int
+	height   int
+	keys     keyMap
+	help     help.Model
+	table    table.Model
+	state    view
+	selected map[int]struct{}
 }
