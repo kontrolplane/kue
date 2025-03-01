@@ -25,6 +25,7 @@ resources:
     LOCALLY
     ARG AWS_ENDPOINT_URL="http://localhost:4566"
     RUN aws sqs create-queue --queue-name northernlights-kue
+    RUN aws sqs create-queue --queue-name northernlights-kue-deadletter
 
 list:
     LOCALLY
