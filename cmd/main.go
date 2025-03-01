@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -20,14 +21,6 @@ func (m model) Init() tea.Cmd {
 
 func Execute() {
 
-	// Initialize the model
-	m := model{
-		cursor:   0,
-		keys:     keys,
-		help:     help.New(),
-		selected: make(map[int]struct{}),
-	}
-
 	// Setup debug logging to file
 	f, err := tea.LogToFile("debug.log", "debug")
 	if err != nil {
@@ -35,6 +28,22 @@ func Execute() {
 		os.Exit(1)
 	}
 	defer f.Close()
+
+	// Context is a context that can be used to cancel the program
+	ctx := context.Background()
+
+	// Get the list of queues
+	queues, err := ListQueues(ctx)
+
+	// Initialize the model
+	m := model{
+		cursor:   0,
+		keys:     keys,
+		help:     help.New(),
+		selected: make(map[int]struct{}),
+
+		queues: queues,
+	}
 
 	// Run the program
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {

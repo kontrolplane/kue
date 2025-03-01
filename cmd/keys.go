@@ -28,13 +28,17 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{ // first column
 			k.Up,
 			k.Down,
+		},
+		{ // second column
 			k.Left,
 			k.Right,
 		},
-		{ // second column
-			k.Help,
+		{ // third column
 			k.View,
 			k.Select,
+		},
+		{ // fourth column
+			k.Help,
 			k.Quit,
 		},
 	}

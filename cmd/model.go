@@ -21,4 +21,6 @@ type model struct {
 	table    table.Model
 	state    view
 	selected map[int]struct{}
+
+	queues []string
 }

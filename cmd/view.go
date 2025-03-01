@@ -9,7 +9,7 @@ import (
 func (m model) View() string {
 
 	var h string = "northernlights/kue"
-	var c string = "content"
+	var c string = m.queues[0]
 	var f string = m.help.View(m.keys)
 
 	content := lipgloss.NewStyle().
