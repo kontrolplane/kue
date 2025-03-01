@@ -22,5 +22,5 @@ type model struct {
 	state    view
 	selected map[int]struct{}
 
-	queues []string
+	queues []queue
 }

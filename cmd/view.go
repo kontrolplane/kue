@@ -9,7 +9,7 @@ import (
 func (m model) View() string {
 
 	var h string = "northernlights/kue"
-	var c string = m.queues[0]
+	var c string = m.queues[0].protocol + " " + m.queues[0].serviceEndpoint + " " + m.queues[0].accountIdentifier + " " + m.queues[0].name
 	var f string = m.help.View(m.keys)
 
 	content := lipgloss.NewStyle().
