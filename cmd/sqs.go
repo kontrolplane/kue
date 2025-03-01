@@ -9,15 +9,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
-type queue struct {
-	protocol          string
-	serviceEndpoint   string
-	accountIdentifier string
-	name              string
+type Queue struct {
+	Protocol          string
+	ServiceEndpoint   string
+	AccountIdentifier string
+	Name              string
 }
 
 // ListQueues lists the SQS queues
-func ListQueues(ctx context.Context) (queues []queue, err error) {
+func ListQueues(ctx context.Context) (queues []Queue, err error) {
 
 	// Create an SQS client
 	client := createSqsClient(ctx)
@@ -57,16 +57,16 @@ func ListQueuesByPrefix() (queueUrls []string, err error) {
 }
 
 // extractQueueStruct extracts the queue struct from a queue URL
-func extractQueueStruct(queueUrl string) (queue, error) {
+func extractQueueStruct(queueUrl string) (Queue, error) {
 	parts := strings.Split(queueUrl, "/")
 	if len(parts) < 5 {
-		return queue{}, fmt.Errorf("Invalid queue URL: %s", queueUrl)
+		return Queue{}, fmt.Errorf("Invalid queue URL: %s", queueUrl)
 	}
 
-	return queue{
-		protocol:          strings.TrimSuffix(parts[0], ":"),
-		serviceEndpoint:   parts[2],
-		accountIdentifier: parts[3],
-		name:              parts[4],
+	return Queue{
+		Protocol:          strings.TrimSuffix(parts[0], ":"),
+		ServiceEndpoint:   parts[2],
+		AccountIdentifier: parts[3],
+		Name:              parts[4],
 	}, nil
 }
