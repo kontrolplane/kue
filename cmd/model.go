@@ -14,13 +14,16 @@ const (
 
 type model struct {
 	cursor   int
-	width    int
-	height   int
-	keys     keyMap
-	help     help.Model
-	table    table.Model
 	state    view
 	selected map[int]struct{}
+
+	width  int
+	height int
+
+	keys keyMap
+	help help.Model
+
+	table table.Model
 
 	queues []Queue
 }

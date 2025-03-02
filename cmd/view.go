@@ -9,20 +9,7 @@ var sqsOverviewStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("240"))
 
-var sqsOverviewColumns []table.Column = []table.Column{
-	{
-		Title: "Type", Width: 10,
-	},
-	{
-		Title: "Service Endpoint", Width: 50,
-	},
-	{
-		Title: "Account Identifier", Width: 30,
-	},
-	{
-		Title: "Queue Name", Width: 30,
-	},
-}
+const padding = 40
 
 // View renders the program's UI, which is just a string. The view is
 // rendered after every Update.
@@ -31,13 +18,24 @@ func (m model) View() string {
 	var h string = "northernlights/kue"
 	var f string = m.help.View(m.keys)
 
+	var sqsOverviewColumns []table.Column = []table.Column{
+		{
+			Title: "account", Width: int(0.2 * float64(m.width-padding)),
+		},
+		{
+			Title: "service endpoint", Width: int(0.5 * float64(m.width-padding)),
+		},
+		{
+			Title: "queue name", Width: int(0.3 * float64(m.width-padding)),
+		},
+	}
+
 	var sqsOverviewRows []table.Row = []table.Row{}
 
 	for _, q := range m.queues {
 		sqsOverviewRows = append(sqsOverviewRows, table.Row{
-			q.Protocol,
-			q.ServiceEndpoint,
 			q.AccountIdentifier,
+			q.ServiceEndpoint,
 			q.Name,
 		})
 	}
@@ -58,11 +56,13 @@ func (m model) View() string {
 		Bold(false)
 
 	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
+		Foreground(lipgloss.Color("#ffffff")).
+		Background(lipgloss.Color("#628049")).
 		Bold(false)
 
 	t.SetStyles(s)
+
+	t.SetCursor(m.cursor)
 
 	content := lipgloss.NewStyle().
 		Width(m.width).

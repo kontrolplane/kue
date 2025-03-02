@@ -24,8 +24,12 @@ container:
 resources:
     LOCALLY
     ARG AWS_ENDPOINT_URL="http://localhost:4566"
-    RUN aws sqs create-queue --queue-name northernlights-kue
-    RUN aws sqs create-queue --queue-name northernlights-kue-deadletter
+    RUN aws sqs create-queue --queue-name northernlights-users
+    RUN aws sqs create-queue --queue-name northernlights-users-deadletter
+    RUN aws sqs create-queue --queue-name northernlights-emails
+    RUN aws sqs create-queue --queue-name northernlights-emails-deadletter
+    RUN aws sqs create-queue --queue-name northernlights-orders
+    RUN aws sqs create-queue --queue-name northernlights-orders-deadletter
 
 list:
     LOCALLY

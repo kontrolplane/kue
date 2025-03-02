@@ -19,15 +19,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle key presses, these are shown at the bottom of the view.
 	case tea.KeyMsg:
 		switch {
+
 		case key.Matches(msg, m.keys.Up):
+			if m.cursor > 0 {
+				m.cursor--
+			}
+
 		case key.Matches(msg, m.keys.Down):
-		case key.Matches(msg, m.keys.Left):
-		case key.Matches(msg, m.keys.Right):
+			if m.cursor < len(m.queues)-1 {
+				m.cursor++
+			}
+
 		case key.Matches(msg, m.keys.Select):
+			if _, ok := m.selected[m.cursor]; ok {
+				delete(m.selected, m.cursor)
+			} else {
+				m.selected[m.cursor] = struct{}{}
+			}
+
 		case key.Matches(msg, m.keys.View):
 
 		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
+
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		}
