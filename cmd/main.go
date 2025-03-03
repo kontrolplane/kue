@@ -10,6 +10,7 @@ import (
 )
 
 var (
+	ProjectName = "kontrolplane"
 	ProgramName = "kue"
 )
 

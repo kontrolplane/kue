@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -9,24 +11,22 @@ var sqsOverviewStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("240"))
 
-const padding = 40
-
 // View renders the program's UI, which is just a string. The view is
 // rendered after every Update.
 func (m model) View() string {
 
-	var h string = "northernlights/kue"
+	var h string = fmt.Sprintf("%s/%s", ProjectName, ProgramName)
 	var f string = m.help.View(m.keys)
 
 	var sqsOverviewColumns []table.Column = []table.Column{
 		{
-			Title: "account", Width: int(0.2 * float64(m.width-padding)),
+			Title: "account", Width: 20,
 		},
 		{
-			Title: "service endpoint", Width: int(0.5 * float64(m.width-padding)),
+			Title: "service endpoint", Width: 50,
 		},
 		{
-			Title: "queue name", Width: int(0.3 * float64(m.width-padding)),
+			Title: "queue name", Width: 40,
 		},
 	}
 
@@ -44,7 +44,7 @@ func (m model) View() string {
 		table.WithColumns(sqsOverviewColumns),
 		table.WithRows(sqsOverviewRows),
 		table.WithFocused(true),
-		table.WithHeight(7),
+		table.WithHeight(10),
 	)
 
 	s := table.DefaultStyles()
