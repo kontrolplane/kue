@@ -10,12 +10,12 @@ Kue is a terminal user interface (tui) application designed for managing aws sqs
 
 ## keybindings
 
-`q`, `esc`, `ctrl+c`: quit
-`↑`, `k`: up
-`↓`, `j`: down
-`→`, `l`: right
-`←`, `h`: left
-`?`: help
-`enter`: view
-`space`: select
-`/`: filter
+- `q`, `esc`, `ctrl+c`: quit
+- `↑`, `k`: up
+- `↓`, `j`: down
+- `→`, `l`: right
+- `←`, `h`: left
+- `?`: help
+- `enter`: view
+- `space`: select
+- `/`: filter
