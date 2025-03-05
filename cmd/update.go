@@ -9,6 +9,8 @@ import (
 // and, in response, update the model and/or send a command.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
+	var c tea.Cmd
+
 	switch msg := msg.(type) {
 
 	// Handle window resizes by updating the width and height in the model.
@@ -20,24 +22,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 
-		case key.Matches(msg, m.keys.Up):
-			if m.cursor > 0 {
-				m.cursor--
-			}
-
-		case key.Matches(msg, m.keys.Down):
-			if m.cursor < len(m.queues)-1 {
-				m.cursor++
-			}
-
 		case key.Matches(msg, m.keys.Select):
+
+		case key.Matches(msg, m.keys.View):
 			if _, ok := m.selected[m.cursor]; ok {
 				delete(m.selected, m.cursor)
 			} else {
 				m.selected[m.cursor] = struct{}{}
-			}
 
-		case key.Matches(msg, m.keys.View):
+				if m.state == QueueOverview {
+					m.state = QueueDetails
+				}
+			}
 
 		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
@@ -47,5 +43,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
+	m.table, c = m.table.Update(msg)
+	return m, c
 }

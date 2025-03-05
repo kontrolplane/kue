@@ -8,13 +8,19 @@ import (
 type view uint
 
 const (
-	Overview view = iota
-	Message
+	QueueOverview view = iota
+	QueueDetails
+	QueueCreate
+	QueueDelete
+	MessageDetails
+	MessageCreate
+	MessageDelete
 )
 
 type model struct {
-	cursor   int
-	state    view
+	cursor int
+	state  view
+
 	selected map[int]struct{}
 
 	width  int
@@ -24,6 +30,4 @@ type model struct {
 	help help.Model
 
 	table table.Model
-
-	queues []Queue
 }

@@ -6,6 +6,9 @@ import (
 	"os"
 
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/lipgloss"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -28,26 +31,66 @@ func Execute() {
 	// Get the list of queues
 	queues, err := ListQueues(ctx)
 
-	// Initialize the model
-	m := model{
+	var queueOverviewColumns []table.Column = []table.Column{
+		{
+			Title: "account", Width: 20,
+		},
+		{
+			Title: "service endpoint", Width: 50,
+		},
+		{
+			Title: "queue name", Width: 40,
+		},
+	}
+
+	var queueOverviewRows []table.Row = []table.Row{}
+
+	for _, q := range queues {
+		queueOverviewRows = append(queueOverviewRows, table.Row{
+			q.AccountIdentifier,
+			q.ServiceEndpoint,
+			q.Name,
+		})
+	}
+
+	t := table.New(
+		table.WithColumns(queueOverviewColumns),
+		table.WithRows(queueOverviewRows),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+
+	s := table.DefaultStyles()
+
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(false)
+
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("#ffffff")).
+		Background(lipgloss.Color("#628049")).
+		Bold(false)
+
+	t.SetStyles(s)
+
+	f, err := tea.LogToFile("debug.log", "help")
+	if err != nil {
+		fmt.Println("Couldn't open a file for logging:", err)
+		os.Exit(1)
+	}
+	defer f.Close() // nolint:errcheck
+
+	// Run the program
+	if _, err := tea.NewProgram(model{
 		cursor:   0,
 		keys:     keys,
 		help:     help.New(),
 		selected: make(map[int]struct{}),
 
-		queues: queues,
-	}
-
-	// Setup debug logging to file
-	f, err := tea.LogToFile("debug.log", "debug")
-	if err != nil {
-		fmt.Println("fatal:", err)
-		os.Exit(1)
-	}
-	defer f.Close()
-
-	// Run the program
-	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+		table: t,
+	}, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
 	}
