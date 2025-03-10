@@ -12,6 +12,7 @@ compile:
     FROM +deps
     COPY main.go .
     COPY cmd/ cmd/
+    COPY pkg/ pkg/
     RUN go build -o build/kontrolplane/kue main.go
     SAVE ARTIFACT build/kontrolplane/kue AS LOCAL build/kontrolplane/kue
 

@@ -1,4 +1,4 @@
-package model
+package tui
 
 import (
 	"github.com/charmbracelet/bubbles/table"
@@ -27,13 +27,19 @@ var queueOverviewColumns []table.Column = []table.Column{
 	},
 }
 
-var queueOverviewRows []table.Row = []table.Row{}
-
-type QueueOverviewModel struct {
-	table table.Model
+var queueOverviewRows []table.Row = []table.Row{
+	{"account-1", "https://service-endpoint-1", "queue-1"},
+	{"account-2", "https://service-endpoint-2", "queue-2"},
+	{"account-3", "https://service-endpoint-3", "queue-3"},
+	{"account-4", "https://service-endpoint-4", "queue-4"},
 }
 
-func NewQueueOverviewModel() *QueueOverviewModel {
+func (m model) QueueOverviewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m = m.SwitchPage(queueOverview)
+	return m, nil
+}
+
+func (m model) QueueOverviewView() string {
 
 	/**
 	for _, q := range queues {
@@ -67,19 +73,9 @@ func NewQueueOverviewModel() *QueueOverviewModel {
 
 	t.SetStyles(s)
 
-	return &QueueOverviewModel{
-		table: t,
-	}
+	return t.View()
 }
 
-func (m QueueOverviewModel) Init() tea.Cmd {
-	return nil
-}
-
-func (m QueueOverviewModel) View() string {
-	return ""
-}
-
-func (m QueueOverviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) QueueOverviewUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
