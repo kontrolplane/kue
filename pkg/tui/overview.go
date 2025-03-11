@@ -16,6 +16,7 @@ var (
 type queueOverviewState struct {
 	selected int
 	queues   []sqs.Queue
+	table    table.Model
 }
 
 var columnMap = map[int]string{
@@ -48,11 +49,32 @@ func (m model) QueueOverviewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) QueueOverviewView() string {
+// Helper function to initialize the queue overview table
+func initQueueOverviewTable() table.Model {
 
-	if m.table == nil {
-		return "Loading queues..."
-	}
+	t := table.New(
+		table.WithColumns(queueOverviewColumns),
+		table.WithRows(queueOverviewRows),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(false)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("#ffffff")).
+		Background(lipgloss.Color("#628049")).
+		Bold(false)
+	t.SetStyles(s)
+
+	return t
+}
+
+func (m model) QueueOverviewView() string {
 
 	/**
 	for _, q := range queues {
@@ -64,29 +86,7 @@ func (m model) QueueOverviewView() string {
 	}
 	*/
 
-	t := table.New(
-		table.WithColumns(queueOverviewColumns),
-		table.WithRows(queueOverviewRows),
-		table.WithFocused(true),
-		table.WithHeight(10),
-	)
-
-	s := table.DefaultStyles()
-
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(false)
-
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("#ffffff")).
-		Background(lipgloss.Color("#628049")).
-		Bold(false)
-
-	t.SetStyles(s)
-
-	return t.View()
+	return m.state.queueOverview.table.View()
 }
 
 func (m model) QueueOverviewUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {

@@ -62,6 +62,8 @@ func NewModel(
 
 	context := context.Background()
 
+	queueOverviewTable := initQueueOverviewTable()
+
 	return model{
 		projectName: projectName,
 		programName: programName,
@@ -76,6 +78,7 @@ func NewModel(
 		state: state{
 			queueOverview: queueOverviewState{
 				selected: 0,
+				table:    queueOverviewTable,
 			},
 			queueDetails: queueDetailsState{},
 		},
