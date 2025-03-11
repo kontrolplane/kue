@@ -5,9 +5,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
+	sqs "github.com/kontrolplane/kue/pkg/sqs"
 )
 
-var viewNameQueueOverview = "queue overview"
+var (
+	viewNameQueueOverview = "queue overview"
+	errNoQueuesFound      = "No queues found"
+)
+
+type queueOverviewState struct {
+	selected int
+	queues   []sqs.Queue
+}
 
 var columnMap = map[int]string{
 	0: "account",
@@ -40,6 +49,10 @@ func (m model) QueueOverviewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) QueueOverviewView() string {
+
+	if m.table == nil {
+		return "Loading queues..."
+	}
 
 	/**
 	for _, q := range queues {

@@ -29,26 +29,26 @@ type model struct {
 	projectName string
 	programName string
 	viewName    string
+	page        page
+	previous    page
+	state       state
+	queues      []sqs.Queue
+	context     context.Context
+	width       int
+	height      int
+	keys        keys.KeyMap
+	help        help.Model
+	table       tea.Model
+	error       string
+}
 
-	page     page
-	previous page
-
-	queues []sqs.Queue
-
-	context context.Context
-
-	width  int
-	height int
-
-	keys keys.KeyMap
-	help help.Model
-
-	table tea.Model
+type state struct {
+	queueOverview queueOverviewState
+	queueDetails  queueDetailsState
 }
 
 var (
-	projectName = "kontrolplane"
-	programName = "kue"
+	errNoPageSelected = "No page selected"
 )
 
 var mainStyle = lipgloss.NewStyle().
@@ -72,6 +72,13 @@ func NewModel(
 
 		keys: keys.Keys,
 		help: help.New(),
+
+		state: state{
+			queueOverview: queueOverviewState{
+				selected: 0,
+			},
+			queueDetails: queueDetailsState{},
+		},
 	}, nil
 }
 
@@ -87,19 +94,29 @@ func (m model) Init() tea.Cmd {
 func (m model) View() string {
 	var h string = fmt.Sprintf("%s/%s • %s", m.projectName, m.programName, m.viewName)
 	var f string = m.help.View(m.keys)
+	var c string
+
+	if m.error != "" {
+		return m.ErrorView()
+	}
+
+	switch m.page {
+	case queueOverview:
+		c = m.QueueOverviewView()
+	default:
+		c = errNoPageSelected
+	}
 
 	content := lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.height).
 		Align(lipgloss.Center, lipgloss.Center).
-		Render(h + "\n\n" + mainStyle.Render(m.table.View()) + "\n\n" + f)
+		Render(h + "\n\n" + mainStyle.Render(c) + "\n\n" + f)
 
 	return lipgloss.JoinVertical(lipgloss.Top, content)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-
-	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 
@@ -123,6 +140,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	var cmd tea.Cmd
+
+	// Handle page-specific updates.
 	switch m.page {
 	case queueOverview:
 		// m, cmd = m.QueueOverviewUpdate(msg)

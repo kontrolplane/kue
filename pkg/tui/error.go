@@ -1,5 +1,5 @@
 package tui
 
 func (m model) ErrorView() string {
-	return ""
+	return m.error
 }

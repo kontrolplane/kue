@@ -2,9 +2,16 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	sqs "github.com/kontrolplane/kue/pkg/sqs"
 )
 
 var viewNameQueueDetails = "queue details"
+
+type queueDetailsState struct {
+	selected int
+	queue    sqs.Queue
+	messages []sqs.Message
+}
 
 func (m model) QueueDetailsView() string {
 	return ""
