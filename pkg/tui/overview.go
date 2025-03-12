@@ -54,7 +54,6 @@ func initQueueOverviewTable() table.Model {
 
 	t := table.New(
 		table.WithColumns(queueOverviewColumns),
-		table.WithRows(queueOverviewRows),
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
@@ -76,15 +75,17 @@ func initQueueOverviewTable() table.Model {
 
 func (m model) QueueOverviewView() string {
 
-	/**
-	for _, q := range queues {
+	var queueOverviewRows []table.Row
+
+	for _, q := range m.state.queueOverview.queues {
 		queueOverviewRows = append(queueOverviewRows, table.Row{
 			q.AccountIdentifier,
 			q.ServiceEndpoint,
 			q.Name,
 		})
 	}
-	*/
+
+	m.state.queueOverview.table.SetRows(queueOverviewRows)
 
 	return m.state.queueOverview.table.View()
 }

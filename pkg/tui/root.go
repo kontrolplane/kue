@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
+	client "github.com/kontrolplane/kue/pkg/client"
 	keys "github.com/kontrolplane/kue/pkg/keys"
 	sqs "github.com/kontrolplane/kue/pkg/sqs"
 )
@@ -32,7 +33,6 @@ type model struct {
 	page        page
 	previous    page
 	state       state
-	queues      []sqs.Queue
 	context     context.Context
 	width       int
 	height      int
@@ -91,6 +91,17 @@ func (m model) SwitchPage(page page) model {
 }
 
 func (m model) Init() tea.Cmd {
+
+	client, err := client.CreateSqsClient(m.context)
+	if err != nil {
+		m.error = fmt.Sprintf("Couldn't create SQS client.")
+	}
+
+	m.state.queueOverview.queues, err = sqs.ListQueues(client, m.context)
+	if err != nil {
+		m.error = fmt.Sprintf("Couldn't list queues.")
+	}
+
 	return nil
 }
 

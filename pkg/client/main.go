@@ -39,11 +39,11 @@ func fetchContext(ctx context.Context) (aws.Config, error) {
 // Returns:
 //
 //   - *sqs.Client - A new SQS client initialized with the fetched configuration, or nil if an error occurs.
-func createSqsClient(ctx context.Context) *sqs.Client {
+func CreateSqsClient(ctx context.Context) (*sqs.Client, error) {
 	config, err := fetchContext(ctx)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return sqs.NewFromConfig(config)
+	return sqs.NewFromConfig(config), nil
 }
