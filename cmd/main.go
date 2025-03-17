@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,6 +21,10 @@ func Execute() {
 		os.Exit(1)
 	}
 	defer f.Close()
+
+	log.SetOutput(f)
+
+	log.Println("Debug logging initialized")
 
 	model, err := tui.NewModel(projectName, programName)
 	if err != nil || model == nil {

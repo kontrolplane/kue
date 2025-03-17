@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"log"
+
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 
@@ -68,6 +70,8 @@ func initQueueOverviewTable() table.Model {
 
 func (m model) QueueOverviewView() string {
 
+	log.Println("[QueueOverviewView] queues:", m.state.queueOverview.queues)
+
 	var queueOverviewRows []table.Row
 
 	for _, q := range m.state.queueOverview.queues {
@@ -78,11 +82,14 @@ func (m model) QueueOverviewView() string {
 		})
 	}
 
-	m.state.queueOverview.table.SetRows(queueOverviewRows)
+	log.Println("[QueueOverviewView] table rows:", queueOverviewRows)
 
+	m.state.queueOverview.table.SetRows(queueOverviewRows)
 	return m.state.queueOverview.table.View()
 }
 
-func (m model) QueueOverviewUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	return m, nil
+func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+	return m, cmd
 }

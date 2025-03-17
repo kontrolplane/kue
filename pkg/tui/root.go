@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -62,9 +63,10 @@ func NewModel(
 
 	context := context.Background()
 
+	log.Println("[NewModel] Initializing new model")
 	queueOverviewTable := initQueueOverviewTable()
 
-	return model{
+	m := model{
 		projectName: projectName,
 		programName: programName,
 		viewName:    viewNameQueueOverview,
@@ -82,43 +84,83 @@ func NewModel(
 			},
 			queueDetails: queueDetailsState{},
 		},
-	}, nil
-}
+	}
 
-func (m model) SwitchPage(page page) model {
-	m.page = page
-	return m
+	log.Println("[NewModel] Model initialized")
+	return m, nil
 }
 
 func (m model) Init() tea.Cmd {
+    log.Println("[Init] Starting initialization")
 
 	client, err := client.CreateSqsClient(m.context)
 	if err != nil {
-		m.error = fmt.Sprintf("Couldn't create SQS client.")
+		m.error = fmt.Sprintf("[Init] Couldn't create SQS client: %v", err)
 	}
 
 	m.state.queueOverview.queues, err = sqs.ListQueues(client, m.context)
 	if err != nil {
-		m.error = fmt.Sprintf("Couldn't list queues.")
+		m.error = fmt.Sprintf("[Init] Error listing queues: %v", err)
 	}
 
+	log.Println("[Init] Initialization complete, queues:", len(m.state.queueOverview.queues))
 	return nil
 }
 
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    log.Printf("[Update] Received message of type: %T", msg)
+
+	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg:
+        log.Printf("[Update] Window size changed to %dx%d", msg.Width, msg.Height)
+		m.width = msg.Width
+		m.height = msg.Height
+
+	case tea.KeyMsg:
+        log.Printf("[Update] Key pressed: %s", msg.String())
+		switch {
+        case key.Matches(msg, m.keys.Select):
+            log.Println("[Update] Select key pressed")
+        case key.Matches(msg, m.keys.View):
+            log.Println("[Update] View key pressed")
+        case key.Matches(msg, m.keys.Help):
+            log.Println("[Update] Help key pressed")
+			m.help.ShowAll = !m.help.ShowAll
+
+        case key.Matches(msg, m.keys.Quit):
+            log.Println("[Update] Quit key pressed")
+            return m, tea.Quit
+		}
+	}
+
+	var cmd tea.Cmd
+	switch m.page {
+	case queueOverview:
+        log.Printf("[Update] Queue overview page, queues count: %d", len(m.state.queueOverview.queues))
+		// m, cmd = m.QueueOverviewUpdate(msg)
+	}
+
+	return m, cmd
+}
+
 func (m model) View() string {
-	var h string = fmt.Sprintf("%s/%s • %s", m.projectName, m.programName, m.viewName)
+    log.Printf("[View] Rendering view for page: %d, queue count: %d", m.page, len(m.state.queueOverview.queues))
+
+	var h string = formatHeader(m.projectName, m.programName, m.viewName)
 	var f string = m.help.View(m.keys)
 	var c string
-
-	if m.error != "" {
-		return m.ErrorView()
-	}
 
 	switch m.page {
 	case queueOverview:
 		c = m.QueueOverviewView()
 	default:
 		c = errNoPageSelected
+	}
+
+	if m.error != "" {
+        log.Printf("[View] Rendering error: %s", m.error)
+		c = m.ErrorView()
 	}
 
 	content := lipgloss.NewStyle().
@@ -128,39 +170,4 @@ func (m model) View() string {
 		Render(h + "\n\n" + mainStyle.Render(c) + "\n\n" + f)
 
 	return lipgloss.JoinVertical(lipgloss.Top, content)
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-
-	switch msg := msg.(type) {
-
-	// Handle window resizes by updating the width and height in the model.
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-
-	// Handle key presses, these are shown at the bottom of the view.
-	case tea.KeyMsg:
-		switch {
-
-		case key.Matches(msg, m.keys.Select):
-		case key.Matches(msg, m.keys.View):
-
-		case key.Matches(msg, m.keys.Help):
-			m.help.ShowAll = !m.help.ShowAll
-
-		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
-		}
-	}
-
-	var cmd tea.Cmd
-
-	// Handle page-specific updates.
-	switch m.page {
-	case queueOverview:
-		// m, cmd = m.QueueOverviewUpdate(msg)
-	}
-
-	return m, cmd
 }
