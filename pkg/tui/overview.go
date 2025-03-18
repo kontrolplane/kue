@@ -3,6 +3,7 @@ package tui
 import (
 	"log"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 
@@ -90,6 +91,30 @@ func (m model) QueueOverviewView() string {
 
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
-	m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, m.keys.Up):
+		case key.Matches(msg, m.keys.Down):
+			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+
+		case key.Matches(msg, m.keys.View):
+			selected := m.state.queueOverview.table.Cursor()
+			if selected >= 0 && selected < len(m.state.queueOverview.queues) {
+				m.previous = m.page
+				m.page = queueDetails
+				m.viewName = viewNameQueueDetails
+				m.state.queueDetails.queue = m.state.queueOverview.queues[selected]
+			}
+
+		default:
+			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+		}
+
+	default:
+		m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+	}
+
 	return m, cmd
 }

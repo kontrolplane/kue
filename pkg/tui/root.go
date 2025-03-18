@@ -141,7 +141,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.page {
 	case queueOverview:
 		log.Printf("[Update] Queue overview page, queues count: %d", len(m.state.queueOverview.queues))
-		// m, cmd = m.QueueOverviewUpdate(msg)
+		m, cmd = m.QueueOverviewUpdate(msg)
 	}
 
 	return m, cmd
