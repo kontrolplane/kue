@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
-	client "github.com/kontrolplane/kue/pkg/client"
+	"github.com/kontrolplane/kue/pkg/client"
 	keys "github.com/kontrolplane/kue/pkg/keys"
 	sqs "github.com/kontrolplane/kue/pkg/sqs"
 )
@@ -61,7 +61,20 @@ func NewModel(
 	programName string,
 ) (tea.Model, error) {
 
+	var error string
+	var queues []sqs.Queue
+
 	context := context.Background()
+
+	client, err := client.CreateSqsClient(context)
+	if err != nil {
+		error = fmt.Sprintf("[NewModel] Couldn't create SQS client: %v", err)
+	}
+
+	queues, err = sqs.ListQueues(client, context)
+	if err != nil {
+		error = fmt.Sprintf("[NewModel] Error listing queues: %v", err)
+	}
 
 	log.Println("[NewModel] Initializing new model")
 	queueOverviewTable := initQueueOverviewTable()
@@ -74,6 +87,8 @@ func NewModel(
 		page:    queueOverview,
 		context: context,
 
+		error: error,
+
 		keys: keys.Keys,
 		help: help.New(),
 
@@ -81,6 +96,7 @@ func NewModel(
 			queueOverview: queueOverviewState{
 				selected: 0,
 				table:    queueOverviewTable,
+				queues:   queues,
 			},
 			queueDetails: queueDetailsState{},
 		},
@@ -91,53 +107,40 @@ func NewModel(
 }
 
 func (m model) Init() tea.Cmd {
-    log.Println("[Init] Starting initialization")
-
-	client, err := client.CreateSqsClient(m.context)
-	if err != nil {
-		m.error = fmt.Sprintf("[Init] Couldn't create SQS client: %v", err)
-	}
-
-	m.state.queueOverview.queues, err = sqs.ListQueues(client, m.context)
-	if err != nil {
-		m.error = fmt.Sprintf("[Init] Error listing queues: %v", err)
-	}
-
-	log.Println("[Init] Initialization complete, queues:", len(m.state.queueOverview.queues))
 	return nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-    log.Printf("[Update] Received message of type: %T", msg)
+	log.Printf("[Update] Received message of type: %T", msg)
 
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
-        log.Printf("[Update] Window size changed to %dx%d", msg.Width, msg.Height)
+		log.Printf("[Update] Window size changed to %dx%d", msg.Width, msg.Height)
 		m.width = msg.Width
 		m.height = msg.Height
 
 	case tea.KeyMsg:
-        log.Printf("[Update] Key pressed: %s", msg.String())
+		log.Printf("[Update] Key pressed: %s", msg.String())
 		switch {
-        case key.Matches(msg, m.keys.Select):
-            log.Println("[Update] Select key pressed")
-        case key.Matches(msg, m.keys.View):
-            log.Println("[Update] View key pressed")
-        case key.Matches(msg, m.keys.Help):
-            log.Println("[Update] Help key pressed")
+		case key.Matches(msg, m.keys.Select):
+			log.Println("[Update] Select key pressed")
+		case key.Matches(msg, m.keys.View):
+			log.Println("[Update] View key pressed")
+		case key.Matches(msg, m.keys.Help):
+			log.Println("[Update] Help key pressed")
 			m.help.ShowAll = !m.help.ShowAll
 
-        case key.Matches(msg, m.keys.Quit):
-            log.Println("[Update] Quit key pressed")
-            return m, tea.Quit
+		case key.Matches(msg, m.keys.Quit):
+			log.Println("[Update] Quit key pressed")
+			return m, tea.Quit
 		}
 	}
 
 	var cmd tea.Cmd
 	switch m.page {
 	case queueOverview:
-        log.Printf("[Update] Queue overview page, queues count: %d", len(m.state.queueOverview.queues))
+		log.Printf("[Update] Queue overview page, queues count: %d", len(m.state.queueOverview.queues))
 		// m, cmd = m.QueueOverviewUpdate(msg)
 	}
 
@@ -145,7 +148,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-    log.Printf("[View] Rendering view for page: %d, queue count: %d", m.page, len(m.state.queueOverview.queues))
+	log.Printf("[View] Rendering view for page: %d, queue count: %d", m.page, len(m.state.queueOverview.queues))
 
 	var h string = formatHeader(m.projectName, m.programName, m.viewName)
 	var f string = m.help.View(m.keys)
@@ -159,7 +162,7 @@ func (m model) View() string {
 	}
 
 	if m.error != "" {
-        log.Printf("[View] Rendering error: %s", m.error)
+		log.Printf("[View] Rendering error: %s", m.error)
 		c = m.ErrorView()
 	}
 
