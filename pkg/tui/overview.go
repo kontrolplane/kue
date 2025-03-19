@@ -28,6 +28,8 @@ var columnMap = map[int]string{
 	2: "fifo",
 	3: "last modified",
 	4: "messages",
+	5: "delayed",
+	6: "not visible",
 }
 
 var queueOverviewColumns []table.Column = []table.Column{
@@ -41,10 +43,16 @@ var queueOverviewColumns []table.Column = []table.Column{
 		Title: columnMap[2], Width: 10,
 	},
 	{
-		Title: columnMap[3], Width: 30,
+		Title: columnMap[3], Width: 20,
 	},
 	{
 		Title: columnMap[4], Width: 10,
+	},
+	{
+		Title: columnMap[5], Width: 10,
+	},
+	{
+		Title: columnMap[6], Width: 15,
 	},
 }
 
@@ -93,6 +101,8 @@ func (m model) QueueOverviewView() string {
 			q.IsFifo,
 			q.LastModified,
 			q.ApproximateNumberOfMessages,
+			q.ApproximateNumberOfMessagesDelayed,
+			q.ApproximateNumberOfMessagesNotVisible,
 		})
 	}
 
