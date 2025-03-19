@@ -14,17 +14,12 @@
 
 ## views
 
-- queue overview
-- queue details
-- queue creation
-- queue delete
-- message details
-- message creation
-- message delete
+- `queue`: overview, details, creation, delete
+- `message`: details, creation, delete
 
 ## keybindings
 
-- `q`, `esc`, `ctrl+c`: quit
+- `q`, `esc`, `ctrl+c`: quit/return
 - `↑`, `k`: up
 - `↓`, `j`: down
 - `→`, `l`: right

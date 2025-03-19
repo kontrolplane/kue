@@ -3,7 +3,7 @@ Set Width 2400
 Set Height 1200
 Set TypingSpeed 300ms
 Set BorderRadius 10
-Set Margin 20
+Set Margin 30
 Set MarginFill "#536c54"
 
 Output ./assets/demonstration.gif
@@ -15,5 +15,4 @@ Show
 
 Type "./build/kontrolplane/kue"
 Enter
-
-Sleep 10s
+Sleep 30s
