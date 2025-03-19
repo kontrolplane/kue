@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
-	sqs "github.com/kontrolplane/kue/pkg/sqs"
+	kue "github.com/kontrolplane/kue/pkg/kue"
 )
 
 var (
@@ -18,25 +18,33 @@ var (
 
 type queueOverviewState struct {
 	selected int
-	queues   []sqs.Queue
+	queues   []kue.Queue
 	table    table.Model
 }
 
 var columnMap = map[int]string{
-	0: "account",
-	1: "service endpoint",
-	2: "queue name",
+	0: "queue name",
+	1: "dlq",
+	2: "fifo",
+	3: "last modified",
+	4: "messages",
 }
 
 var queueOverviewColumns []table.Column = []table.Column{
 	{
-		Title: columnMap[0], Width: 20,
+		Title: columnMap[0], Width: 40,
 	},
 	{
-		Title: columnMap[1], Width: 50,
+		Title: columnMap[1], Width: 10,
 	},
 	{
-		Title: columnMap[2], Width: 40,
+		Title: columnMap[2], Width: 10,
+	},
+	{
+		Title: columnMap[3], Width: 30,
+	},
+	{
+		Title: columnMap[4], Width: 10,
 	},
 }
 
@@ -55,15 +63,18 @@ func initQueueOverviewTable() table.Model {
 	)
 
 	s := table.DefaultStyles()
+
 	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		BorderBottom(true).
 		Bold(false)
+
 	s.Selected = s.Selected.
 		Foreground(lipgloss.Color("#ffffff")).
 		Background(lipgloss.Color("#628049")).
 		Bold(false)
+
 	t.SetStyles(s)
 
 	return t
@@ -77,15 +88,18 @@ func (m model) QueueOverviewView() string {
 
 	for _, q := range m.state.queueOverview.queues {
 		queueOverviewRows = append(queueOverviewRows, table.Row{
-			q.AccountIdentifier,
-			q.ServiceEndpoint,
 			q.Name,
+			q.IsDeadletter,
+			q.IsFifo,
+			q.LastModified,
+			q.ApproximateNumberOfMessages,
 		})
 	}
 
 	log.Println("[QueueOverviewView] table rows:", queueOverviewRows)
 
 	m.state.queueOverview.table.SetRows(queueOverviewRows)
+
 	return m.state.queueOverview.table.View()
 }
 

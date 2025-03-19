@@ -8,11 +8,11 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kontrolplane/kue/pkg/client"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kontrolplane/kue/pkg/client"
 	keys "github.com/kontrolplane/kue/pkg/keys"
-	sqs "github.com/kontrolplane/kue/pkg/sqs"
+	kue "github.com/kontrolplane/kue/pkg/kue"
 )
 
 type page uint
@@ -62,7 +62,7 @@ func NewModel(
 ) (tea.Model, error) {
 
 	var error string
-	var queues []sqs.Queue
+	var queues []kue.Queue
 
 	context := context.Background()
 
@@ -71,9 +71,21 @@ func NewModel(
 		error = fmt.Sprintf("[NewModel] Couldn't create SQS client: %v", err)
 	}
 
-	queues, err = sqs.ListQueues(client, context)
+	queues, err = kue.ListQueuesUrls(client, context)
 	if err != nil {
 		error = fmt.Sprintf("[NewModel] Error listing queues: %v", err)
+	}
+
+	for i, queue := range queues {
+		log.Printf("[NewModel] fetching queue attributes: %s", queue.Url)
+
+		queue, err = kue.FetchQueueAttributes(client, context, queue.Url)
+		if err != nil {
+			error = fmt.Sprintf("[NewModel] Error fetching queue attributes: %v", err)
+		}
+
+		log.Printf("[NewModel] fetched queue attributes: %s", queue)
+		queues[i] = queue
 	}
 
 	log.Println("[NewModel] Initializing new model")

@@ -5,5 +5,5 @@ import (
 )
 
 func formatHeader(projectName, programName, viewName string) string {
-	return fmt.Sprintf("%s/%s • %s", projectName, programName, viewName)
+	return fmt.Sprintf("%s/%s • page: %s", projectName, programName, viewName)
 }
