@@ -29,6 +29,7 @@
 - `space`: select
 - `/`: filter
 
+</br>
 
 <p align="center">
   <img width="1500" alt="kontrolplane foter" src="./assets/kontrolplane-footer.svg">
