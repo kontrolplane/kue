@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">
     <a href="https://kontrolplane.dev">
-      <img width="1500" alt="kontrolplane banner" src="./assets/kontrolplane-banner.svg">
+      <img width="1500" alt="kontrolplane header" src="./assets/kontrolplane-header.svg">
     </a>
   </h1>
 </p>
@@ -30,3 +30,6 @@
 - `/`: filter
 
 
+<p align="center">
+  <img width="1500" alt="kontrolplane foter" src="./assets/kontrolplane-footer.svg">
+</p>
