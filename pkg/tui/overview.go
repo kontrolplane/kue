@@ -24,12 +24,10 @@ type queueOverviewState struct {
 
 var columnMap = map[int]string{
 	0: "queue name",
-	1: "dlq",
-	2: "fifo",
-	3: "last modified",
-	4: "messages",
-	5: "delayed",
-	6: "not visible",
+	1: "last modified",
+	2: "messages",
+	3: "delayed",
+	4: "not visible",
 }
 
 var queueOverviewColumns []table.Column = []table.Column{
@@ -37,22 +35,16 @@ var queueOverviewColumns []table.Column = []table.Column{
 		Title: columnMap[0], Width: 40,
 	},
 	{
-		Title: columnMap[1], Width: 10,
+		Title: columnMap[1], Width: 20,
 	},
 	{
 		Title: columnMap[2], Width: 10,
 	},
 	{
-		Title: columnMap[3], Width: 20,
+		Title: columnMap[3], Width: 10,
 	},
 	{
-		Title: columnMap[4], Width: 10,
-	},
-	{
-		Title: columnMap[5], Width: 10,
-	},
-	{
-		Title: columnMap[6], Width: 15,
+		Title: columnMap[4], Width: 15,
 	},
 }
 
@@ -97,8 +89,6 @@ func (m model) QueueOverviewView() string {
 	for _, q := range m.state.queueOverview.queues {
 		queueOverviewRows = append(queueOverviewRows, table.Row{
 			q.Name,
-			q.IsDeadletter,
-			q.IsFifo,
 			q.LastModified,
 			q.ApproximateNumberOfMessages,
 			q.ApproximateNumberOfMessagesDelayed,

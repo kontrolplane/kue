@@ -3,7 +3,9 @@ package kue
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
@@ -27,18 +29,30 @@ func FetchQueueAttributes(client *sqs.Client, ctx context.Context, queueUrl stri
 	}
 
 	attributeMap := map[types.QueueAttributeName]*string{
-		types.QueueAttributeNameCreatedTimestamp:                      &queue.CreatedTimestamp,
-		types.QueueAttributeNameLastModifiedTimestamp:                 &queue.LastModified,
+		types.QueueAttributeNameQueueArn:                              &queue.Arn,
 		types.QueueAttributeNameDelaySeconds:                          &queue.DelaySeconds,
 		types.QueueAttributeNameMaximumMessageSize:                    &queue.MaxMessageSize,
 		types.QueueAttributeNameMessageRetentionPeriod:                &queue.MessageRetentionPeriod,
 		types.QueueAttributeNameReceiveMessageWaitTimeSeconds:         &queue.ReceiveMessageWaitTime,
 		types.QueueAttributeNameVisibilityTimeout:                     &queue.VisibilityTimeout,
-		types.QueueAttributeNameFifoQueue:                             &queue.IsFifo,
 		types.QueueAttributeNameContentBasedDeduplication:             &queue.ContentBasedDeduplication,
 		types.QueueAttributeNameApproximateNumberOfMessages:           &queue.ApproximateNumberOfMessages,
 		types.QueueAttributeNameApproximateNumberOfMessagesNotVisible: &queue.ApproximateNumberOfMessagesNotVisible,
 		types.QueueAttributeNameApproximateNumberOfMessagesDelayed:    &queue.ApproximateNumberOfMessagesDelayed,
+	}
+
+	if val, ok := attrsResult.Attributes[string(types.QueueAttributeNameCreatedTimestamp)]; ok {
+		createdTime, err := strconv.ParseInt(val, 10, 64)
+		if err == nil {
+			queue.CreatedTimestamp = time.Unix(createdTime, 0).Format("2006-01-02 15:04:05")
+		}
+	}
+
+	if val, ok := attrsResult.Attributes[string(types.QueueAttributeNameLastModifiedTimestamp)]; ok {
+		modifiedTime, err := strconv.ParseInt(val, 10, 64)
+		if err == nil {
+			queue.LastModified = time.Unix(modifiedTime, 0).Format("2006-01-02 15:04:05")
+		}
 	}
 
 	for attrName, field := range attributeMap {

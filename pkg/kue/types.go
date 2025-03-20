@@ -19,9 +19,12 @@ type Queue struct {
 	ApproximateNumberOfMessages           string            `json:"approximate_number_of_messages"`
 	ApproximateNumberOfMessagesNotVisible string            `json:"approximate_number_of_messages_not_visible"`
 	ApproximateNumberOfMessagesDelayed    string            `json:"approximate_number_of_messages_delayed"`
-	IsDeadletter                          string            `json:"deadletter"`
-	IsFifo                                string            `json:"fifo_queue"`
+	RedrivePolicy                         string            `json:"redrive_policy,omitempty"`
+	RedriveAllowPolicy                    string            `json:"redrive_allow_policy,omitempty"`
+	DeadLetterTargetARN                   string            `json:"dead_letter_target_arn"`
+	FifoQueue                             string            `json:"fifo_queue"`
 	ContentBasedDeduplication             string            `json:"content_based_deduplication,omitempty"`
+	DeduplicationScope                    string            `json:"deduplication_scope,omitempty"`
 	Tags                                  map[string]string `json:"tags,omitempty"`
 }
 
