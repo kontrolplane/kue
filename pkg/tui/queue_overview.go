@@ -53,6 +53,14 @@ func (m model) QueueOverviewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) NoQueuesFound() (bool) {
+	return m.QueuesCount == 0
+}
+
+func (m model) QueuesCount () int {
+	return len(m.state.queueOverview.queues)
+}
+
 // Helper function to initialize the queue overview table
 func initQueueOverviewTable() table.Model {
 
@@ -78,29 +86,6 @@ func initQueueOverviewTable() table.Model {
 	t.SetStyles(s)
 
 	return t
-}
-
-func (m model) QueueOverviewView() string {
-
-	log.Println("[QueueOverviewView] queues:", m.state.queueOverview.queues)
-
-	var queueOverviewRows []table.Row
-
-	for _, q := range m.state.queueOverview.queues {
-		queueOverviewRows = append(queueOverviewRows, table.Row{
-			q.Name,
-			q.LastModified,
-			q.ApproximateNumberOfMessages,
-			q.ApproximateNumberOfMessagesDelayed,
-			q.ApproximateNumberOfMessagesNotVisible,
-		})
-	}
-
-	log.Println("[QueueOverviewView] table rows:", queueOverviewRows)
-
-	m.state.queueOverview.table.SetRows(queueOverviewRows)
-
-	return m.state.queueOverview.table.View()
 }
 
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
@@ -131,4 +116,32 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m model) QueueOverviewView() string {
+
+	log.Println("[QueueOverviewView] queues:", m.state.queueOverview.queues)
+
+	if m.NoQueuesFound() {
+
+		// add row spanning the whole table 'No queue's found.'
+
+		return m.state.queueOverview.table.View()
+	}
+
+	var queueOverviewRows []table.Row
+
+	for _, queue := range m.state.queueOverview.queues {
+		queueOverviewRows = append(queueOverviewRows, table.Row{
+			queue.Name,
+			queue.LastModified,
+			queue.ApproximateNumberOfMessages,
+			queue.ApproximateNumberOfMessagesDelayed,
+			queue.ApproximateNumberOfMessagesNotVisible,
+		})
+	}
+
+	m.state.queueOverview.table.SetRows(queueOverviewRows)
+
+	return m.state.queueOverview.table.View()
 }
