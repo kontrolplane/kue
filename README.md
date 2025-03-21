@@ -9,7 +9,7 @@
 `Kue` is a terminal user interface (tui) application designed for managing aws sqs (simple queue service). It provides an intuitive and efficient way to interact with your sqs queues directly from the terminal. With Kue, you can easily create, delete, and manage messages within your queues, making it an essential tool for engineers who prefer working within a terminal environment.
 
 <p align="center">
-  <img width="1500" alt="kue demonstration" src="./assets/demonstration.gif">
+  <img width="1500" alt="kue cassette" src="./assets/cassette.gif">
 </p>
 
 ## views
