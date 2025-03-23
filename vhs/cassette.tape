@@ -1,11 +1,10 @@
 Set FontSize 20
 Set Width 1800
 Set Height 900
-Set TypingSpeed 300ms
+Set TypingSpeed 400ms
 Set BorderRadius 10
 Set Margin 30
 Set MarginFill "#536c54"
-Set WindowBar Colorful
 
 Output ./assets/cassette.gif
 
