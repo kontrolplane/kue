@@ -7,7 +7,7 @@ Set Margin 30
 Set MarginFill "#536c54"
 Set WindowBar Colorful
 
-Output ./assets/demonstration.gif
+Output ./assets/cassette.gif
 
 Hide
   Type "go build -o build/kontrolplane/kue main.go & clear"
