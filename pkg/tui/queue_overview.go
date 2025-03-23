@@ -53,11 +53,11 @@ func (m model) QueueOverviewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) NoQueuesFound() (bool) {
-	return m.QueuesCount == 0
+func (m model) NoQueuesFound() bool {
+	return m.QueuesCount() == 0
 }
 
-func (m model) QueuesCount () int {
+func (m model) QueuesCount() int {
 	return len(m.state.queueOverview.queues)
 }
 
