@@ -49,8 +49,7 @@ var queueOverviewColumns []table.Column = []table.Column{
 }
 
 func (m model) QueueOverviewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
-	m = m.SwitchPage(queueOverview)
-	return m, nil
+	return m.SwitchPage(queueOverview), nil
 }
 
 func (m model) NoQueuesFound() bool {

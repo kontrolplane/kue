@@ -15,18 +15,6 @@ import (
 	kue "github.com/kontrolplane/kue/pkg/kue"
 )
 
-type page uint
-
-const (
-	queueOverview page = iota
-	queueDetails
-	queueCreate
-	queueDelete
-	queueMessageDetails
-	queueMessageCreate
-	queuemessageDelete
-)
-
 type model struct {
 	projectName string
 	programName string

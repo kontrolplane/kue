@@ -4,12 +4,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var viewNameQueueCreation = "queue creation"
+var viewNameQueueCreate = "queue create"
 
-func (m model) QueueCreationView() string {
+func (m model) QueueCreateSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m.SwitchPage(queueCreate), nil
+}
+
+func (m model) QueueCreateView() string {
 	return ""
 }
 
-func (m model) QueueCreationUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) QueueCreateUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }

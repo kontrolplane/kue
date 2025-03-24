@@ -4,12 +4,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var viewNameMessageDetails = "message details"
+var viewNameQueueMessageDetails = "queue message details"
 
-func (m model) MessageDetailsView() string {
+func (m model) QueueMessageDetailsSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m.SwitchPage(queueMessageDetails), nil
+}
+
+func (m model) QueueMessageDetailsView() string {
 	return ""
 }
 
-func (m model) MessageDetailsUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) QueueMessageDetailsUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }

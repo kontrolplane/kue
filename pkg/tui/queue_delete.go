@@ -6,6 +6,10 @@ import (
 
 var viewNameQueueDelete = "queue delete"
 
+func (m model) QueueDeleteSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m.SwitchPage(queueDelete), nil
+}
+
 func (m model) QueueDeleteView() string {
 	return ""
 }

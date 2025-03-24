@@ -13,17 +13,15 @@ type queueDetailsState struct {
 	messages []kue.Message
 }
 
-func (m model) QueueDetailsView() string {
-	return ""
-}
-
 func (m model) QueueDetailsSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
-	m = m.SwitchPage(queueDetails)
-	return m, nil
+	return m.SwitchPage(queueDetails), nil
 }
 
 func (m model) QueueDetailsUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	m = m.SwitchPage(queueDetails)
 
 	return m, nil
+}
+
+func (m model) QueueDetailsView() string {
+	return ""
 }
