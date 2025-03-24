@@ -14,8 +14,10 @@
 
 ## views
 
-- `queue`: overview, details, creation, delete
-- `message`: details, creation, delete
+- `queue`: overview, details<sup>2</sup>, creation<sup>2</sup>, delete<sup>2</sup>
+- `message`: details<sup>2</sup>, creation<sup>2</sup>, delete<sup>2</sup>
+
+<sup>2</sup>: work in progress
 
 ## keybindings
 
