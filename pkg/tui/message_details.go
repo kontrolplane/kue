@@ -6,7 +6,7 @@ import (
 
 var viewNameQueueMessageDetails = "queue message details"
 
-func (m model) QueueMessageDetailsSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) QueueMessageDetailsSwitchPage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.SwitchPage(queueMessageDetails), nil
 }
 

@@ -15,31 +15,6 @@ import (
 	kue "github.com/kontrolplane/kue/pkg/kue"
 )
 
-type model struct {
-	projectName string
-	programName string
-	viewName    string
-	page        page
-	previous    page
-	state       state
-	context     context.Context
-	width       int
-	height      int
-	keys        keys.KeyMap
-	help        help.Model
-	table       tea.Model
-	error       string
-}
-
-type state struct {
-	queueOverview queueOverviewState
-	queueDetails  queueDetailsState
-}
-
-var (
-	errNoPageSelected = "No page selected"
-)
-
 var mainStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("240"))
@@ -140,7 +115,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch m.page {
 	case queueOverview:
-		log.Printf("[Update] Queue overview page, queues count: %d", len(m.state.queueOverview.queues))
 		m, cmd = m.QueueOverviewUpdate(msg)
 	}
 

@@ -11,10 +11,7 @@ import (
 	kue "github.com/kontrolplane/kue/pkg/kue"
 )
 
-var (
-	viewNameQueueOverview = "queue overview"
-	errNoQueuesFound      = "No queues found"
-)
+var viewNameQueueOverview = "queue overview"
 
 type queueOverviewState struct {
 	selected int
@@ -48,7 +45,7 @@ var queueOverviewColumns []table.Column = []table.Column{
 	},
 }
 
-func (m model) QueueOverviewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) QueueOverviewSwitchPage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.SwitchPage(queueOverview), nil
 }
 
@@ -87,16 +84,39 @@ func initQueueOverviewTable() table.Model {
 	return t
 }
 
+func (m model) nextQueue() (model, tea.Cmd) {
+	n := m.state.queueOverview.selected + 1
+	l := len(m.state.queueOverview.queues) - 1
+
+	if n > l {
+		n = l
+	}
+
+	m.state.queueOverview.selected = n
+	return m, nil
+}
+
+func (m model) previousQueue() (model, tea.Cmd) {
+	n := m.state.queueOverview.selected - 1
+
+	if n < 0 {
+		n = 0
+	}
+
+	m.state.queueOverview.selected = n
+	return m, nil
+}
+
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, m.keys.Up):
 		case key.Matches(msg, m.keys.Down):
-			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
-
+			return m.nextQueue()
+		case key.Matches(msg, m.keys.Up):
+			return m.previousQueue()
 		case key.Matches(msg, m.keys.View):
 			selected := m.state.queueOverview.table.Cursor()
 			if selected >= 0 && selected < len(m.state.queueOverview.queues) {

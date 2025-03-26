@@ -13,12 +13,11 @@ type queueDetailsState struct {
 	messages []kue.Message
 }
 
-func (m model) QueueDetailsSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) QueueDetailsSwitchPage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.SwitchPage(queueDetails), nil
 }
 
 func (m model) QueueDetailsUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-
 	return m, nil
 }
 
