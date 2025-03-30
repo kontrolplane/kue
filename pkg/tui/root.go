@@ -131,6 +131,8 @@ func (m model) View() string {
 	switch m.page {
 	case queueOverview:
 		c = m.QueueOverviewView()
+	case queueDetails:
+		c = m.QueueDetailsView()
 	default:
 		c = errNoPageSelected
 	}

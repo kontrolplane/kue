@@ -16,11 +16,18 @@ Show
 Type "./build/kontrolplane/kue"
 Enter
 
+Sleep 2
 Type "j"
 Sleep 2
 Type "j"
-Sleep 3
+Sleep 2
 Type "j"
+Sleep 2
+Type "j"
+Sleep 2
+Type "j"
+Sleep 2
+Type "enter"
 
 Screenshot ./assets/pages/queue/overview.png
 
