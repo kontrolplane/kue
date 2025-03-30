@@ -16,6 +16,12 @@ Show
 Type "./build/kontrolplane/kue"
 Enter
 
+Type "j"
+Sleep 2
+Type "j"
+Sleep 3
+Type "j"
+
 Screenshot ./assets/pages/queue/overview.png
 
 Sleep 30s

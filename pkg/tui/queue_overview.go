@@ -114,9 +114,11 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Down):
-			return m.nextQueue()
+			m, cmd = m.nextQueue()
+			m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 		case key.Matches(msg, m.keys.Up):
-			return m.previousQueue()
+			m, cmd = m.previousQueue()
+			m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 		case key.Matches(msg, m.keys.View):
 			selected := m.state.queueOverview.table.Cursor()
 			if selected >= 0 && selected < len(m.state.queueOverview.queues) {
@@ -129,7 +131,6 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 		default:
 			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
 		}
-
 	default:
 		m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
 	}
@@ -142,10 +143,7 @@ func (m model) QueueOverviewView() string {
 	log.Println("[QueueOverviewView] queues:", m.state.queueOverview.queues)
 
 	if m.NoQueuesFound() {
-
-		// add row spanning the whole table 'No queue's found.'
-
-		return m.state.queueOverview.table.View()
+		return "No queues found."
 	}
 
 	var queueOverviewRows []table.Row
@@ -161,6 +159,7 @@ func (m model) QueueOverviewView() string {
 	}
 
 	m.state.queueOverview.table.SetRows(queueOverviewRows)
+	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 
 	return m.state.queueOverview.table.View()
 }
