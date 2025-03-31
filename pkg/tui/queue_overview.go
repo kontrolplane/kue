@@ -11,8 +11,6 @@ import (
 	kue "github.com/kontrolplane/kue/pkg/kue"
 )
 
-var viewNameQueueOverview = "queue overview"
-
 type queueOverviewState struct {
 	selected int
 	queues   []kue.Queue
@@ -124,7 +122,6 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 			if selected >= 0 && selected < len(m.state.queueOverview.queues) {
 				m.previous = m.page
 				m.page = queueDetails
-				m.viewName = viewNameQueueDetails
 				m.state.queueDetails.queue = m.state.queueOverview.queues[selected]
 			}
 

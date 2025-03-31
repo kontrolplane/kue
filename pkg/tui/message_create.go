@@ -5,8 +5,6 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-var viewNameQueueMessageCreate = "queue message create"
-
 type queueMessageCreateInput struct {
 	messageBody   string
 	deliveryDelay string

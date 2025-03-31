@@ -40,14 +40,14 @@ func NewModel(
 	}
 
 	for i, queue := range queues {
-		log.Printf("[NewModel] fetching queue attributes: %s", queue.Url)
+		log.Printf("[NewModel] Fetching queue attributes: %s", queue.Url)
 
 		queue, err = kue.FetchQueueAttributes(client, context, queue.Url)
 		if err != nil {
 			error = fmt.Sprintf("[NewModel] Error fetching queue attributes: %v", err)
 		}
 
-		log.Printf("[NewModel] fetched queue attributes: %s", queue)
+		log.Printf("[NewModel] Fetched queue attributes: %s", queue)
 		queues[i] = queue
 	}
 
@@ -57,10 +57,8 @@ func NewModel(
 	m := model{
 		projectName: projectName,
 		programName: programName,
-		viewName:    viewNameQueueOverview,
-
-		page:    queueOverview,
-		context: context,
+		page:        queueOverview,
+		context:     context,
 
 		error: error,
 
@@ -124,7 +122,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	log.Printf("[View] Rendering view for page: %d, queue count: %d", m.page, len(m.state.queueOverview.queues))
 
-	var h string = formatHeader(m.projectName, m.programName, m.viewName)
+	var h string = formatHeader(m.projectName, m.programName, views[m.page])
 	var f string = m.help.View(m.keys)
 	var c string
 

@@ -13,21 +13,24 @@ Hide
   Enter
 Show
 
-Type "./build/kontrolplane/kue"
+Sleep 2
+Copy "./build/kontrolplane/kue"
+Paste
 Enter
+Sleep 5
 
-Sleep 2
-Type "j"
-Sleep 2
-Type "j"
-Sleep 2
-Type "j"
-Sleep 2
-Type "j"
-Sleep 2
-Type "j"
-Sleep 2
-Type "enter"
+Sleep 1
+Down
+Sleep 1
+Down
+Sleep 1
+Down
+Sleep 1
+Down
+Sleep 1
+Down
+Sleep 1
+Enter
 
 Screenshot ./assets/pages/queue/overview.png
 

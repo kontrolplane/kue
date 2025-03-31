@@ -6,8 +6,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var viewNameQueueCreate = "queue create"
-
 type queueCreateInput struct {
 	queueType              string
 	name                   string

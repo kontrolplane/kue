@@ -4,8 +4,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var viewNameQueueDelete = "queue delete"
-
 type queueDeleteState struct {
 }
 

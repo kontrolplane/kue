@@ -4,8 +4,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var viewNameQueueMessageDelete = "queue message delete"
-
 func (m model) QueueMessageDeleteSwitchPage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.SwitchPage(queueMessageDelete), nil
 }
