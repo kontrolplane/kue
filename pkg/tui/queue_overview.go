@@ -83,26 +83,17 @@ func initQueueOverviewTable() table.Model {
 }
 
 func (m model) nextQueue() (model, tea.Cmd) {
-	n := m.state.queueOverview.selected + 1
-	l := len(m.state.queueOverview.queues) - 1
-
-	if n > l {
-		n = l
-	}
-
-	m.state.queueOverview.selected = n
-	return m, nil
+    if m.state.queueOverview.selected < len(m.state.queueOverview.queues) - 1 {
+        m.state.queueOverview.selected++
+    }
+    return m, nil
 }
 
 func (m model) previousQueue() (model, tea.Cmd) {
-	n := m.state.queueOverview.selected - 1
-
-	if n < 0 {
-		n = 0
-	}
-
-	m.state.queueOverview.selected = n
-	return m, nil
+    if m.state.queueOverview.selected > 0 {
+        m.state.queueOverview.selected--
+    }
+    return m, nil
 }
 
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {

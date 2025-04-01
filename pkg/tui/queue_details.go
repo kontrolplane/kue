@@ -15,27 +15,26 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.SwitchPage(queueDetails), nil
 }
 
+func (m model) NoMessagesFound() bool {
+	return m.MessagesCount() == 0
+}
+
+func (m model) MessagesCount() int {
+	return len(m.state.queueDetails.messages)
+}
+
 func (m model) nextMessage() (model, tea.Cmd) {
-	n := m.state.queueDetails.selected + 1
-	l := len(m.state.queueDetails.messages) - 1
-
-	if n > l {
-		n = l
-	}
-
-	m.state.queueDetails.selected = n
-	return m, nil
+    if m.state.queueDetails.selected < len(m.state.queueDetails.messages) - 1 {
+        m.state.queueDetails.selected++
+    }
+    return m, nil
 }
 
 func (m model) previousMessage() (model, tea.Cmd) {
-	n := m.state.queueDetails.selected - 1
-
-	if n < 0 {
-		n = 0
-	}
-
-	m.state.queueDetails.selected = n
-	return m, nil
+    if m.state.queueDetails.selected > 0 {
+        m.state.queueDetails.selected--
+    }
+    return m, nil
 }
 
 func (m model) QueueDetailsUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
