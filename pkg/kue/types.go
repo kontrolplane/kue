@@ -1,9 +1,5 @@
 package kue
 
-import (
-	"time"
-)
-
 // docs: https://github.com/aws/aws-sdk-go-v2/blob/service/sqs/v1.37.15/service/sqs/types/enums.go#L58
 type Queue struct {
 	Url                                   string            `json:"url"`
@@ -41,11 +37,11 @@ type Message struct {
 	Attributes             map[string]string `json:"attributes,omitempty"`
 	MessageAttributes      map[string]string `json:"message_attributes,omitempty"`
 	ReceiptHandle          string            `json:"receipt_handle"`
-	FirstReceiveTime       time.Time         `json:"first_receive_time,omitempty"`
-	ReceiveCount           int               `json:"receive_count"`
-	SentTimestamp          time.Time         `json:"sent_timestamp"`
-	DelaySeconds           int               `json:"delay_seconds,omitempty"`
-	VisibilityTimeout      int               `json:"visibility_timeout,omitempty"`
+	FirstReceiveTime       string            `json:"first_receive_time,omitempty"`
+	ReceiveCount           string            `json:"receive_count"`
+	SentTimestamp          string            `json:"sent_timestamp"`
+	DelaySeconds           string            `json:"delay_seconds,omitempty"`
+	VisibilityTimeout      string            `json:"visibility_timeout,omitempty"`
 	MessageGroupID         string            `json:"message_group_id,omitempty"`
 	MessageDeduplicationID string            `json:"message_deduplication_id,omitempty"`
 	SequenceNumber         string            `json:"sequence_number,omitempty"`

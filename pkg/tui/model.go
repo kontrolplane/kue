@@ -11,10 +11,10 @@ import (
 type model struct {
 	projectName string
 	programName string
-	viewName    string
 	page        page
 	previous    page
 	state       state
+	client 		*sqs.Client
 	context     context.Context
 	width       int
 	height      int

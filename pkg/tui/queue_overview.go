@@ -110,12 +110,10 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 			m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 		case key.Matches(msg, m.keys.View):
 			selected := m.state.queueOverview.table.Cursor()
-			if selected >= 0 && selected < len(m.state.queueOverview.queues) {
-				m.previous = m.page
-				m.page = queueDetails
-				m.state.queueDetails.queue = m.state.queueOverview.queues[selected]
-			}
-
+			m.state.queueDetails.queue = m.state.queueOverview.queues[selected]
+			m.QueueDetailsSwitchPage(msg)
+		case key.Matches(msg, m.keys.Quit):
+			return m, tea.Quit
 		default:
 			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
 		}

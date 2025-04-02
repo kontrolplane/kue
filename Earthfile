@@ -39,6 +39,8 @@ queues:
     RUN aws sqs create-queue --queue-name kontrolplane-orders-deadletter.fifo --attributes FifoQueue=true,ContentBasedDeduplication=true
     RUN aws sqs create-queue --queue-name kontrolplane-logs
     RUN aws sqs create-queue --queue-name kontrolplane-logs-deadletter
+    RUN aws sqs create-queue --queue-name kontrolplane-shipments.fifo --attributes '{"FifoQueue":"true","ContentBasedDeduplication":"true","RedrivePolicy":"{\"deadLetterTargetArn\":\"arn:aws:sqs:'${REGION}':'${ACCOUNT_ID}':kontrolplane-shipments-deadletter.fifo\",\"maxReceiveCount\":\"5\"}"}'
+    RUN aws sqs create-queue --queue-name kontrolplane-shipments-deadletter.fifo --attributes FifoQueue=true,ContentBasedDeduplication=true
 
 messages:
     LOCALLY

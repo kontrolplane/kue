@@ -40,18 +40,13 @@ func NewModel(
 	}
 
 	for i, queue := range queues {
-		log.Printf("[NewModel] Fetching queue attributes: %s", queue.Url)
-
 		queue, err = kue.FetchQueueAttributes(client, context, queue.Url)
 		if err != nil {
 			error = fmt.Sprintf("[NewModel] Error fetching queue attributes: %v", err)
 		}
-
-		log.Printf("[NewModel] Fetched queue attributes: %s", queue)
 		queues[i] = queue
 	}
 
-	log.Println("[NewModel] Initializing new model")
 	queueOverviewTable := initQueueOverviewTable()
 
 	m := model{
@@ -59,6 +54,7 @@ func NewModel(
 		programName: programName,
 		page:        queueOverview,
 		context:     context,
+		client:      client,
 
 		error: error,
 
@@ -71,7 +67,10 @@ func NewModel(
 				table:    queueOverviewTable,
 				queues:   queues,
 			},
-			queueDetails: queueDetailsState{},
+			queueDetails: queueDetailsState{
+				selected: 0,
+				messages: messages,
+			},
 		},
 	}
 
@@ -103,10 +102,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Help):
 			log.Println("[Update] Help key pressed")
 			m.help.ShowAll = !m.help.ShowAll
-
-		case key.Matches(msg, m.keys.Quit):
-			log.Println("[Update] Quit key pressed")
-			return m, tea.Quit
 		}
 	}
 
@@ -114,6 +109,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.page {
 	case queueOverview:
 		m, cmd = m.QueueOverviewUpdate(msg)
+	case queueDetails:
+		m, cmd = m.QueueDetailsUpdate(msg)
 	}
 
 	return m, cmd
