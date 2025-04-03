@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
@@ -27,16 +28,16 @@ var messageColumnMap = map[int]string{
 
 var messageColumns []table.Column = []table.Column{
 	{
-		Title: messageColumnMap[0], Width: 40
+		Title: messageColumnMap[0], Width: 40,
 	},
 	{
-		Title: messageColumnMap[1], Width: 60
+		Title: messageColumnMap[1], Width: 60,
 	},
 	{
-		Title: messageColumnMap[2], Width: 20
+		Title: messageColumnMap[2], Width: 20,
 	},
 	{
-		Title: messageColumnMap[3], Width: 10
+		Title: messageColumnMap[3], Width: 10,
 	},
 }
 
@@ -63,16 +64,17 @@ func initMessageDetailsTable() table.Model {
 	return t
 }
 
-func (m model) QueueDetailsSwitchPage(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+	m = m.SwitchPage(queueDetails)
 
 	messages, err := kue.FetchQueueMessages(m.client, m.context, m.state.queueDetails.queue.Url, 10)
 	if err != nil {
-		error = fmt.Sprintf("[NewModel] Error fetching queue messages: %v", err)
+		m.error = fmt.Sprintf("[QueueDetailsSwitchPage] Error fetching queue messages: %v", err)
 	}
-	
+
 	m.state.queueDetails.messages = messages
 
-	return m.SwitchPage(queueDetails), nil
+	return m, nil
 }
 
 func (m model) NoMessagesFound() bool {
@@ -123,6 +125,9 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueDetailsView() string {
+
+	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue, m.state.queueDetails.messages)
+
 	if m.NoMessagesFound() {
 		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
 	}

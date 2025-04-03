@@ -3,7 +3,9 @@ package tui
 import (
 	"context"
 
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/charmbracelet/bubbles/help"
+
 	tea "github.com/charmbracelet/bubbletea"
 	keys "github.com/kontrolplane/kue/pkg/keys"
 )

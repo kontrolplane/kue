@@ -26,6 +26,7 @@ func NewModel(
 
 	var error string
 	var queues []kue.Queue
+	var messages []kue.Message
 
 	context := context.Background()
 
