@@ -83,17 +83,17 @@ func initQueueOverviewTable() table.Model {
 }
 
 func (m model) nextQueue() (model, tea.Cmd) {
-    if m.state.queueOverview.selected < len(m.state.queueOverview.queues) - 1 {
-        m.state.queueOverview.selected++
-    }
-    return m, nil
+	if m.state.queueOverview.selected < len(m.state.queueOverview.queues)-1 {
+		m.state.queueOverview.selected++
+	}
+	return m, nil
 }
 
 func (m model) previousQueue() (model, tea.Cmd) {
-    if m.state.queueOverview.selected > 0 {
-        m.state.queueOverview.selected--
-    }
-    return m, nil
+	if m.state.queueOverview.selected > 0 {
+		m.state.queueOverview.selected--
+	}
+	return m, nil
 }
 
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
@@ -112,6 +112,12 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 			selected := m.state.queueOverview.selected
 			m.state.queueDetails.queue = m.state.queueOverview.queues[selected]
 			return m.QueueDetailsSwitchPage(msg)
+		case key.Matches(msg, m.keys.Create):
+			return m.QueueCreateSwitchPage(msg)
+		case key.Matches(msg, m.keys.Delete):
+			selected := m.state.queueOverview.selected
+			m.state.queueDelete.queue = m.state.queueOverview.queues[selected]
+			return m.QueueDeleteSwitchPage(msg)
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		default:

@@ -25,7 +25,7 @@ type queueCreateState struct {
 	form  huh.Form
 }
 
-func (m model) QueueCreateSwitchPage(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) QueueCreateSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	return m.SwitchPage(queueCreate), nil
 }
 

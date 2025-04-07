@@ -72,6 +72,9 @@ func NewModel(
 				selected: 0,
 				messages: messages,
 			},
+			queueDelete: queueDeleteState{
+				selected: 0,
+			},
 		},
 	}
 

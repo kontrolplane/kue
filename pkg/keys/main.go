@@ -13,6 +13,8 @@ type KeyMap struct {
 	View   key.Binding
 	Select key.Binding
 	Filter key.Binding
+	Create key.Binding
+	Delete key.Binding
 	Quit   key.Binding
 }
 
@@ -37,6 +39,8 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Select,
 			k.Help,
 			k.Filter,
+			k.Create,
+			k.Delete,
 			k.Quit,
 		},
 	}
@@ -74,6 +78,14 @@ var Keys = KeyMap{
 	Filter: key.NewBinding(
 		key.WithKeys("/"),
 		key.WithHelp("/", "filter"),
+	),
+	Create: key.NewBinding(
+		key.WithKeys("ctrl+n"),
+		key.WithHelp("ctrl+n", "create"),
+	),
+	Delete: key.NewBinding(
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", "delete"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "esc", "ctrl+c"),
