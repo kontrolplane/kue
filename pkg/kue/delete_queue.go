@@ -2,6 +2,7 @@ package kue
 
 import (
 	"context"
+	"log"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -23,6 +24,8 @@ func DeleteQueue(client *sqs.Client, ctx context.Context, queueName string) erro
 	if err != nil {
 		return err
 	}
+
+	log.Printf("[DeleteQueue] Deleted queue: %s", queueName)
 
 	return nil
 }

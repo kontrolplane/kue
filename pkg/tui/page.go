@@ -25,6 +25,7 @@ var views = map[page]string{
 }
 
 func (m model) SwitchPage(page page) model {
+	m.previous = m.page
 	m.page = page
 	return m
 }

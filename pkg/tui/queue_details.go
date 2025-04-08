@@ -65,16 +65,17 @@ func initMessageDetailsTable() table.Model {
 }
 
 func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
-	m = m.SwitchPage(queueDetails)
+
+	log.Println("[QueueDetailsSwitchPage]")
 
 	messages, err := kue.FetchQueueMessages(m.client, m.context, m.state.queueDetails.queue.Url, 10)
 	if err != nil {
-		m.error = fmt.Sprintf("[QueueDetailsSwitchPage] Error fetching queue messages: %v", err)
+		m.error = fmt.Sprintf("Error fetching queue message(s): %v", err)
 	}
 
 	m.state.queueDetails.messages = messages
 
-	return m, nil
+	return m.SwitchPage(queueDetails), nil
 }
 
 func (m model) NoMessagesFound() bool {
@@ -112,8 +113,7 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
 		case key.Matches(msg, m.keys.Quit):
-			m.previous = m.page
-			m.page = queueOverview
+			return m.QueueOverviewSwitchPage(msg)
 		default:
 			m.state.queueDetails.table, cmd = m.state.queueDetails.table.Update(msg)
 		}
@@ -126,24 +126,24 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 
 func (m model) QueueDetailsView() string {
 
-	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue, m.state.queueDetails.messages)
+	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue.Name, m.state.queueDetails.messages)
 
 	if m.NoMessagesFound() {
 		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
 	}
 
-	var messageRows []table.Row
-	for _, message := range m.state.queueDetails.messages {
-		messageRows = append(messageRows, table.Row{
-			message.MessageID,
-			message.Body,
-			message.SentTimestamp,
-			fmt.Sprintf("%d", len(message.Body)),
-		})
-	}
+	// var messageRows []table.Row
+	// for _, message := range m.state.queueDetails.messages {
+	// 	messageRows = append(messageRows, table.Row{
+	// 		message.MessageID,
+	// 		message.Body,
+	// 		message.SentTimestamp,
+	// 		fmt.Sprintf("%d", len(message.Body)),
+	// 	})
+	// }
 
-	m.state.queueDetails.table.SetRows(messageRows)
-	m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+	// m.state.queueDetails.table.SetRows(messageRows)
+	// m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
 
 	return m.state.queueDetails.table.View()
 }

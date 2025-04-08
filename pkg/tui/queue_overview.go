@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -43,8 +44,20 @@ var queueOverviewColumns []table.Column = []table.Column{
 	},
 }
 
-func (m model) QueueOverviewSwitchPage(msg tea.Msg) (tea.Model, tea.Cmd) {
-	return m.SwitchPage(queueOverview), nil
+func (m model) QueueOverviewSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+
+	log.Println("[QueueOverviewSwitchPage]")
+
+	queues, err := kue.ListQueuesUrls(m.client, m.context)
+	if err != nil {
+		m.error = fmt.Sprintf("Error queue(s): %v", err)
+	}
+
+	m.state.queueOverview.selected = 0
+	m.state.queueOverview.queues = queues
+
+	m = m.SwitchPage(queueOverview)
+	return m, updateQueuesCmd(queues)
 }
 
 func (m model) NoQueuesFound() bool {
@@ -96,18 +109,27 @@ func (m model) previousQueue() (model, tea.Cmd) {
 	return m, nil
 }
 
+type UpdateQueuesMsg struct {
+	Queues []kue.Queue
+}
+
+func updateQueuesCmd(queues []kue.Queue) tea.Cmd {
+	return func() tea.Msg {
+		return UpdateQueuesMsg{Queues: queues}
+	}
+}
+
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Down):
 			m, cmd = m.nextQueue()
-			m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousQueue()
-			m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 		case key.Matches(msg, m.keys.View):
 			selected := m.state.queueOverview.selected
 			m.state.queueDetails.queue = m.state.queueOverview.queues[selected]
@@ -132,25 +154,10 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 
 func (m model) QueueOverviewView() string {
 
-	log.Println("[QueueOverviewView] queues:", m.state.queueOverview.queues)
-
 	if m.NoQueuesFound() {
-		return "No queues found."
+		m.error = fmt.Sprint("No queues found")
 	}
 
-	var queueOverviewRows []table.Row
-
-	for _, queue := range m.state.queueOverview.queues {
-		queueOverviewRows = append(queueOverviewRows, table.Row{
-			queue.Name,
-			queue.LastModified,
-			queue.ApproximateNumberOfMessages,
-			queue.ApproximateNumberOfMessagesNotVisible,
-			queue.ApproximateNumberOfMessagesDelayed,
-		})
-	}
-
-	m.state.queueOverview.table.SetRows(queueOverviewRows)
 	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 
 	return m.state.queueOverview.table.View()

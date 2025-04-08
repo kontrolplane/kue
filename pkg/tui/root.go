@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kontrolplane/kue/pkg/client"
 
@@ -78,6 +79,20 @@ func NewModel(
 		},
 	}
 
+	var queueOverviewRows []table.Row
+	for _, queue := range queues {
+		queueOverviewRows = append(queueOverviewRows, table.Row{
+			queue.Name,
+			queue.LastModified,
+			queue.ApproximateNumberOfMessages,
+			queue.ApproximateNumberOfMessagesNotVisible,
+			queue.ApproximateNumberOfMessagesDelayed,
+		})
+	}
+
+	m.state.queueOverview.table.SetRows(queueOverviewRows)
+	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+
 	log.Println("[NewModel] Model initialized")
 	return m, nil
 }
@@ -87,9 +102,27 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Printf("[Update] Received message of type: %T", msg)
 
 	switch msg := msg.(type) {
+
+	case UpdateQueuesMsg:
+		log.Println("[Update] Received queue update message with", len(msg.Queues), "queues")
+		m.state.queueOverview.queues = msg.Queues
+
+		var queueOverviewRows []table.Row
+		for _, queue := range msg.Queues {
+			queueOverviewRows = append(queueOverviewRows, table.Row{
+				queue.Name,
+				queue.LastModified,
+				queue.ApproximateNumberOfMessages,
+				queue.ApproximateNumberOfMessagesNotVisible,
+				queue.ApproximateNumberOfMessagesDelayed,
+			})
+		}
+
+		m.state.queueOverview.table.SetRows(queueOverviewRows)
+		m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		log.Printf("[Update] Window size changed to %dx%d", msg.Width, msg.Height)
@@ -99,12 +132,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		log.Printf("[Update] Key pressed: %s", msg.String())
 		switch {
-		case key.Matches(msg, m.keys.Select):
-			log.Println("[Update] Select key pressed")
-		case key.Matches(msg, m.keys.View):
-			log.Println("[Update] View key pressed")
 		case key.Matches(msg, m.keys.Help):
-			log.Println("[Update] Help key pressed")
 			m.help.ShowAll = !m.help.ShowAll
 		}
 	}
@@ -115,6 +143,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.QueueOverviewUpdate(msg)
 	case queueDetails:
 		m, cmd = m.QueueDetailsUpdate(msg)
+	case queueDelete:
+		m, cmd = m.QueueDeleteUpdate(msg)
 	}
 
 	return m, cmd
@@ -132,6 +162,8 @@ func (m model) View() string {
 		c = m.QueueOverviewView()
 	case queueDetails:
 		c = m.QueueDetailsView()
+	case queueDelete:
+		c = m.QueueDeleteView()
 	default:
 		c = errNoPageSelected
 	}
