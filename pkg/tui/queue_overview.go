@@ -53,11 +53,28 @@ func (m model) QueueOverviewSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 		m.error = fmt.Sprintf("Error queue(s): %v", err)
 	}
 
-	m.state.queueOverview.selected = 0
-	m.state.queueOverview.queues = queues
+	var queueOverviewRows []table.Row
+	for _, queue := range queues {
 
-	m = m.SwitchPage(queueOverview)
-	return m, updateQueuesCmd(queues)
+		queue, err = kue.FetchQueueAttributes(m.client, m.context, queue.Url)
+		if err != nil {
+			m.error = fmt.Sprintf("Error fetching queue attributes: %v", err)
+			continue
+		}
+
+		queueOverviewRows = append(queueOverviewRows, table.Row{
+			queue.Name,
+			queue.LastModified,
+			queue.ApproximateNumberOfMessages,
+			queue.ApproximateNumberOfMessagesNotVisible,
+			queue.ApproximateNumberOfMessagesDelayed,
+		})
+	}
+
+	m.state.queueOverview.table.SetRows(queueOverviewRows)
+	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+
+	return m.SwitchPage(queueOverview), nil
 }
 
 func (m model) NoQueuesFound() bool {

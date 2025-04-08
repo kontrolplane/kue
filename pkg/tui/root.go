@@ -105,25 +105,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
-	case UpdateQueuesMsg:
-		log.Println("[Update] Received queue update message with", len(msg.Queues), "queues")
-		m.state.queueOverview.queues = msg.Queues
-
-		var queueOverviewRows []table.Row
-		for _, queue := range msg.Queues {
-			queueOverviewRows = append(queueOverviewRows, table.Row{
-				queue.Name,
-				queue.LastModified,
-				queue.ApproximateNumberOfMessages,
-				queue.ApproximateNumberOfMessagesNotVisible,
-				queue.ApproximateNumberOfMessagesDelayed,
-			})
-		}
-
-		m.state.queueOverview.table.SetRows(queueOverviewRows)
-		m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
-		return m, nil
-
 	case tea.WindowSizeMsg:
 		log.Printf("[Update] Window size changed to %dx%d", msg.Width, msg.Height)
 		m.width = msg.Width
