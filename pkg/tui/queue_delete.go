@@ -5,21 +5,10 @@ import (
 	"log"
 
 	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	tea "github.com/charmbracelet/bubbletea"
 	kue "github.com/kontrolplane/kue/pkg/kue"
-)
-
-var (
-	primaryButton = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255")).
-			Background(lipgloss.Color("240")).
-			Padding(0, 3)
-
-	secondaryButton = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255")).
-			Background(lipgloss.Color("62")).
-			Padding(0, 3)
 )
 
 type queueDeleteState struct {
@@ -36,8 +25,18 @@ func (m model) QueueDeleteSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 
 func (m model) QueueDeleteView() string {
 
-	dialogBox := lipgloss.NewStyle().
+	dialog := lipgloss.NewStyle().
 		Padding(1, 3)
+
+	secondary := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#ffffff")).
+		Background(lipgloss.Color("#628049")).
+		Padding(0, 3)
+
+	primary := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("255")).
+		Background(lipgloss.Color("240")).
+		Padding(0, 3)
 
 	question := lipgloss.NewStyle().
 		Bold(false).
@@ -47,11 +46,11 @@ func (m model) QueueDeleteView() string {
 	abort := "no"
 
 	if m.state.queueDelete.selected == 0 {
-		confirm = primaryButton.Render(confirm)
-		abort = secondaryButton.Render(abort)
+		confirm = primary.Render(confirm)
+		abort = secondary.Render(abort)
 	} else {
-		confirm = secondaryButton.Render(confirm)
-		abort = primaryButton.Render(abort)
+		confirm = secondary.Render(confirm)
+		abort = primary.Render(abort)
 	}
 
 	buttons := lipgloss.JoinHorizontal(
@@ -61,14 +60,14 @@ func (m model) QueueDeleteView() string {
 		confirm,
 	)
 
-	dialog := lipgloss.JoinVertical(
+	d := lipgloss.JoinVertical(
 		lipgloss.Center,
 		question,
 		"",
 		buttons,
 	)
 
-	return dialogBox.Render(dialog)
+	return dialog.Render(d)
 }
 
 func (m model) switchOption() (model, tea.Cmd) {
@@ -88,14 +87,17 @@ func (m model) QueueDeleteUpdate(msg tea.Msg) (model, tea.Cmd) {
 			m, cmd = m.switchOption()
 		case key.Matches(msg, m.keys.View):
 			if m.state.queueDelete.selected == 0 {
-				m.state.queueDelete.selected = 1
+				m.state.queueDelete.selected = 0
+				return m.QueueOverviewSwitchPage(msg)
+			} else {
+				if err := kue.DeleteQueue(m.client, m.context, m.state.queueDelete.queue.Name); err != nil {
+					m.error = fmt.Sprintf("Error deleting queue: %v", err)
+				}
+				m.state.queueDelete.selected = 0
 				return m.QueueOverviewSwitchPage(msg)
 			}
-			if err := kue.DeleteQueue(m.client, m.context, m.state.queueDelete.queue.Name); err != nil {
-				m.error = fmt.Sprintf("Error deleting queue: %v", err)
-			}
-			return m.QueueOverviewSwitchPage(msg)
 		case key.Matches(msg, m.keys.Quit):
+			m.state.queueDelete.selected = 0
 			return m.QueueOverviewSwitchPage(msg)
 		default:
 			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)

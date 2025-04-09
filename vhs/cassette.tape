@@ -20,19 +20,29 @@ Sleep 5s
 Enter
 Sleep 5s
 
-Sleep 1s
-Down
-Sleep 1s
-Down
-Sleep 1s
-Down
-Sleep 1s
-Down
-Sleep 1s
-Down
-Sleep 1s
-Enter
-
 Screenshot ./assets/pages/queue/overview.png
+
+Sleep 1s
+Down
+Sleep 1s
+Down
+Sleep 1s
+Down
+Sleep 1s
+Down
+Sleep 1s
+Down
+Sleep 1s
+Ctrl+D
+Sleep 2s
+Right
+
+Screenshot ./assets/pages/queue/delete.png
+
+Sleep 2s
+Enter
+Sleep 1s
+
+
 
 Sleep 30s
