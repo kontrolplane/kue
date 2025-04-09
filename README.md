@@ -14,7 +14,7 @@
 
 ## views
 
-- `queue`: overview, details<sup>1</sup>, creation<sup>1</sup>, delete<sup>1</sup>
+- `queue`: overview, details<sup>1</sup>, creation<sup>1</sup>, delete
 - `message`: details<sup>1</sup>, creation<sup>1</sup>, delete<sup>1</sup>
 
 <sup>1</sup>: work in progress
@@ -26,10 +26,24 @@
 - `↓`, `j`: down
 - `→`, `l`: right
 - `←`, `h`: left
+- `ctrl + d`: delete queue/message
+- `ctrl + n`: create queue/message
 - `?`: help
 - `enter`: view
 - `space`: select
 - `/`: filter
+
+## views:
+
+`queue overview`
+<p align="center">
+  <img width="1500" alt="kue queue overview" src="./assets/pages/queue/overview.png">
+</p>
+
+`queue delete`
+<p align="center">
+  <img width="1500" alt="kue queue delete" src="./assets/pages/queue/delete.png">
+</p>
 
 </br>
 
