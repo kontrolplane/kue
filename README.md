@@ -33,7 +33,7 @@
 - `space`: select
 - `/`: filter
 
-## views:
+## demonstration
 
 `queue overview`
 <p align="center">
