@@ -38,9 +38,9 @@ func (m model) QueueDeleteView() string {
 		Background(lipgloss.Color("240")).
 		Padding(0, 3)
 
-	question := lipgloss.NewStyle().
-		Bold(false).
-		Render("are you sure you want to delete queue: " + m.state.queueDelete.queue.Name + "?")
+	queueName := lipgloss.NewStyle().
+		Bold(true).
+		Render(m.state.queueDelete.queue.Name)
 
 	confirm := "yes"
 	abort := "no"
@@ -62,7 +62,9 @@ func (m model) QueueDeleteView() string {
 
 	d := lipgloss.JoinVertical(
 		lipgloss.Center,
-		question,
+		"warning: queue deletion",
+		"",
+		"are you sure you want to delete queue: "+queueName+" ?",
 		"",
 		buttons,
 	)
