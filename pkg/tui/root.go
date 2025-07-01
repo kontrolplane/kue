@@ -69,10 +69,11 @@ func NewModel(
 				table:    queueOverviewTable,
 				queues:   queues,
 			},
-			queueDetails: queueDetailsState{
-				selected: 0,
-				messages: messages,
-			},
+            queueDetails: queueDetailsState{
+                selected: 0,
+                messages: messages,
+                table:    initMessageDetailsTable(),
+            },
 			queueDelete: queueDeleteState{
 				selected: 0,
 			},

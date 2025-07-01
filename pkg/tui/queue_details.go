@@ -132,18 +132,18 @@ func (m model) QueueDetailsView() string {
 		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
 	}
 
-	// var messageRows []table.Row
-	// for _, message := range m.state.queueDetails.messages {
-	// 	messageRows = append(messageRows, table.Row{
-	// 		message.MessageID,
-	// 		message.Body,
-	// 		message.SentTimestamp,
-	// 		fmt.Sprintf("%d", len(message.Body)),
-	// 	})
-	// }
+	var messageRows []table.Row
+	for _, message := range m.state.queueDetails.messages {
+		messageRows = append(messageRows, table.Row{
+			message.MessageID,
+			message.Body,
+			message.SentTimestamp,
+			fmt.Sprintf("%d", len(message.Body)),
+		})
+	}
 
-	// m.state.queueDetails.table.SetRows(messageRows)
-	// m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+	m.state.queueDetails.table.SetRows(messageRows)
+	m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
 
 	return m.state.queueDetails.table.View()
 }
