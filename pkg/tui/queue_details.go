@@ -68,14 +68,35 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 
 	log.Println("[QueueDetailsSwitchPage]")
 
-	messages, err := kue.FetchQueueMessages(m.client, m.context, m.state.queueDetails.queue.Url, 10)
+    // Fetch up to 10 messages from the selected queue so we can render them in the table view
+    messages, err := kue.FetchQueueMessages(m.client, m.context, m.state.queueDetails.queue.Url, 10)
 	if err != nil {
 		m.error = fmt.Sprintf("Error fetching queue message(s): %v", err)
 	}
 
-	m.state.queueDetails.messages = messages
+    m.state.queueDetails.messages = messages
+    m.state.queueDetails.selected = 0
 
-	return m.SwitchPage(queueDetails), nil
+    // Prepare the table rows for rendering
+    var messageRows []table.Row
+    for _, message := range messages {
+        messageRows = append(messageRows, table.Row{
+            message.MessageID,
+            message.Body,
+            message.SentTimestamp,
+            fmt.Sprintf("%d", len(message.Body)),
+        })
+    }
+
+    // Ensure the table has been initialised (it will be when coming from root.NewModel)
+    if m.state.queueDetails.table == nil {
+        m.state.queueDetails.table = initMessageDetailsTable()
+    }
+
+    m.state.queueDetails.table.SetRows(messageRows)
+    m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+
+    return m.SwitchPage(queueDetails), nil
 }
 
 func (m model) NoMessagesFound() bool {
