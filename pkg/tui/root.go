@@ -76,6 +76,9 @@ func NewModel(
 			queueDelete: queueDeleteState{
 				selected: 0,
 			},
+			queueCreate: queueCreateState{
+				// TODO: initialize with an actual huh.Form instance for the form UI
+			},
 		},
 	}
 
@@ -126,6 +129,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.QueueDetailsUpdate(msg)
 	case queueDelete:
 		m, cmd = m.QueueDeleteUpdate(msg)
+	case queueCreate:
+		m2, c2 := m.QueueCreateUpdate(msg)
+		model2, ok := m2.(model)
+		if ok {
+			m = model2
+		}
+		cmd = c2
 	}
 
 	return m, cmd
@@ -145,6 +155,8 @@ func (m model) View() string {
 		c = m.QueueDetailsView()
 	case queueDelete:
 		c = m.QueueDeleteView()
+	case queueCreate:
+		c = m.QueueCreateView()
 	default:
 		c = errNoPageSelected
 	}
