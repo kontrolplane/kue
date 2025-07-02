@@ -30,6 +30,6 @@ type state struct {
 	queueOverview      queueOverviewState
 	queueDetails       queueDetailsState
 	queueDelete        queueDeleteState
-	queueCreate        queueCreateState
+		queueCreate        queueCreateState
 	queueMessageCreate queueMessageCreateState
 }
