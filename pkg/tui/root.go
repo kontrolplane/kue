@@ -73,9 +73,10 @@ func NewModel(
 				selected: 0,
 				messages: messages,
 			},
-			queueDelete: queueDeleteState{
-				selected: 0,
-			},
+            queueDelete: queueDeleteState{
+                selected: 0,
+            },
+            queueCreate: queueCreateState{},
 		},
 	}
 
@@ -122,8 +123,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.page {
 	case queueOverview:
 		m, cmd = m.QueueOverviewUpdate(msg)
-	case queueDetails:
-		m, cmd = m.QueueDetailsUpdate(msg)
+    case queueDetails:
+        m, cmd = m.QueueDetailsUpdate(msg)
+    case queueCreate:
+        m, cmd = m.QueueCreateUpdate(msg)
 	case queueDelete:
 		m, cmd = m.QueueDeleteUpdate(msg)
 	}
@@ -141,8 +144,10 @@ func (m model) View() string {
 	switch m.page {
 	case queueOverview:
 		c = m.QueueOverviewView()
-	case queueDetails:
-		c = m.QueueDetailsView()
+    case queueDetails:
+        c = m.QueueDetailsView()
+    case queueCreate:
+        c = m.QueueCreateView()
 	case queueDelete:
 		c = m.QueueDeleteView()
 	default:
