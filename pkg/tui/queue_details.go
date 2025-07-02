@@ -112,6 +112,12 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+		case key.Matches(msg, m.keys.Delete):
+			selected := m.state.queueDetails.selected
+			if selected < len(m.state.queueDetails.messages) {
+				m.state.queueMessageDelete.message = m.state.queueDetails.messages[selected]
+				return m.QueueMessageDeleteSwitchPage(msg)
+			}
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueOverviewSwitchPage(msg)
 		default:
