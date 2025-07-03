@@ -13,11 +13,11 @@ import (
 type model struct {
 	projectName string
 	programName string
-	page        page
-	previous    page
-	state       state
-	client 		*sqs.Client
-	context     context.Context
+    page        page
+    previous    page
+    state       state
+    client      *sqs.Client
+    context     context.Context
 	width       int
 	height      int
 	keys        keys.KeyMap
@@ -31,5 +31,6 @@ type state struct {
 	queueDetails       queueDetailsState
 	queueDelete        queueDeleteState
 	queueCreate        queueCreateState
-	queueMessageCreate queueMessageCreateState
+    queueMessageCreate  queueMessageCreateState
+    queueMessageRequeue queueMessageRequeueState
 }

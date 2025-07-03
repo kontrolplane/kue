@@ -112,8 +112,15 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
-		case key.Matches(msg, m.keys.Quit):
-			return m.QueueOverviewSwitchPage(msg)
+        case key.Matches(msg, m.keys.Requeue):
+            // set state for modal
+            if m.MessagesCount() > 0 {
+                selectedIdx := m.state.queueDetails.selected
+                m.state.queueMessageRequeue.message = m.state.queueDetails.messages[selectedIdx]
+            }
+            return m.QueueMessageRequeueSwitchPage(msg)
+        case key.Matches(msg, m.keys.Quit):
+            return m.QueueOverviewSwitchPage(msg)
 		default:
 			m.state.queueDetails.table, cmd = m.state.queueDetails.table.Update(msg)
 		}

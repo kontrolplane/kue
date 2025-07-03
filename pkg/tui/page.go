@@ -10,7 +10,8 @@ const (
 	queueRedrive
 	queueMessageDetails
 	queueMessageCreate
-	queueMessageDelete
+    queueMessageDelete
+    queueMessageRequeue
 )
 
 var views = map[page]string{
@@ -21,7 +22,8 @@ var views = map[page]string{
 	queueRedrive:        "queue redrive",
 	queueMessageDetails: "queue message details",
 	queueMessageCreate:  "queue message create",
-	queueMessageDelete:  "queue message delete",
+    queueMessageDelete:  "queue message delete",
+    queueMessageRequeue: "queue message requeue",
 }
 
 func (m model) SwitchPage(page page) model {
