@@ -16,13 +16,17 @@ type model struct {
 	page        page
 	previous    page
 	state       state
-	client 		*sqs.Client
-	context     context.Context
+	client      *sqs.Client
+    context     context.Context
+    cancel      context.CancelFunc
 	width       int
 	height      int
 	keys        keys.KeyMap
 	help        help.Model
 	table       tea.Model
+
+	refreshCh   <-chan []kue.Queue
+
 	error       string
 }
 

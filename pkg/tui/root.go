@@ -29,20 +29,21 @@ func NewModel(
 	var queues []kue.Queue
 	var messages []kue.Message
 
-	context := context.Background()
+	baseCtx := context.Background()
+	ctx, cancel := context.WithCancel(baseCtx)
 
-	client, err := client.CreateSqsClient(context)
+	client, err := client.CreateSqsClient(ctx)
 	if err != nil {
 		error = fmt.Sprintf("[NewModel] Couldn't create SQS client: %v", err)
 	}
 
-	queues, err = kue.ListQueuesUrls(client, context)
+    queues, err = kue.ListQueuesUrls(client, ctx)
 	if err != nil {
 		error = fmt.Sprintf("[NewModel] Error listing queues: %v", err)
 	}
 
 	for i, queue := range queues {
-		queue, err = kue.FetchQueueAttributes(client, context, queue.Url)
+        queue, err = kue.FetchQueueAttributes(client, ctx, queue.Url)
 		if err != nil {
 			error = fmt.Sprintf("[NewModel] Error fetching queue attributes: %v", err)
 		}
@@ -55,8 +56,9 @@ func NewModel(
 		projectName: projectName,
 		programName: programName,
 		page:        queueOverview,
-		context:     context,
-		client:      client,
+        context:     ctx,
+        cancel:      cancel,
+        client:      client,
 
 		error: error,
 
@@ -93,12 +95,21 @@ func NewModel(
 	m.state.queueOverview.table.SetRows(queueOverviewRows)
 	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 
-	log.Println("[NewModel] Model initialized")
-	return m, nil
+    // start polling goroutine
+    interval := readRefreshInterval()
+    ch := startQueuePolling(ctx, client, interval)
+    m.refreshCh = ch
+
+    log.Println("[NewModel] Model initialized")
+    return m, nil
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+    // kick off first read from refresh channel
+    if m.refreshCh != nil {
+        return readQueuesCmd(m.refreshCh)
+    }
+    return nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

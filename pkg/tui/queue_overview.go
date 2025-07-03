@@ -13,9 +13,10 @@ import (
 )
 
 type queueOverviewState struct {
-	selected int
-	queues   []kue.Queue
-	table    table.Model
+    selected int
+    queues   []kue.Queue
+    prev     map[string]kue.Queue
+    table    table.Model
 }
 
 var columnMap = map[int]string{
@@ -131,15 +132,52 @@ type UpdateQueuesMsg struct {
 }
 
 func updateQueuesCmd(queues []kue.Queue) tea.Cmd {
-	return func() tea.Msg {
-		return UpdateQueuesMsg{Queues: queues}
-	}
+    return func() tea.Msg {
+        return UpdateQueuesMsg{Queues: queues}
+    }
 }
 
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
+    var cmd tea.Cmd
 
-	switch msg := msg.(type) {
+    switch msg := msg.(type) {
+    case UpdateQueuesMsg:
+        // Refresh table with diff highlighting
+        m.state.queueOverview.queues = msg.Queues
+        rows := make([]table.Row, 0, len(msg.Queues))
+
+        if m.state.queueOverview.prev == nil {
+            m.state.queueOverview.prev = make(map[string]kue.Queue)
+        }
+
+        highlight := lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+
+        for _, q := range msg.Queues {
+            prevQ, ok := m.state.queueOverview.prev[q.Url]
+            row := table.Row{
+                q.Name,
+                q.LastModified,
+                q.ApproximateNumberOfMessages,
+                q.ApproximateNumberOfMessagesNotVisible,
+                q.ApproximateNumberOfMessagesDelayed,
+            }
+            if ok {
+                if prevQ.ApproximateNumberOfMessages != q.ApproximateNumberOfMessages {
+                    row[2] = highlight.Render(row[2])
+                }
+                if prevQ.ApproximateNumberOfMessagesNotVisible != q.ApproximateNumberOfMessagesNotVisible {
+                    row[3] = highlight.Render(row[3])
+                }
+                if prevQ.ApproximateNumberOfMessagesDelayed != q.ApproximateNumberOfMessagesDelayed {
+                    row[4] = highlight.Render(row[4])
+                }
+            }
+            rows = append(rows, row)
+            m.state.queueOverview.prev[q.Url] = q
+        }
+        m.state.queueOverview.table.SetRows(rows)
+        // trigger waiting for next queue update
+        return m, readQueuesCmd(m.refreshCh)
 
 	case tea.KeyMsg:
 		switch {
@@ -157,8 +195,11 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 			selected := m.state.queueOverview.selected
 			m.state.queueDelete.queue = m.state.queueOverview.queues[selected]
 			return m.QueueDeleteSwitchPage(msg)
-		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
+        case key.Matches(msg, m.keys.Quit):
+            if m.cancel != nil {
+                m.cancel()
+            }
+            return m, tea.Quit
 		default:
 			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
 		}
