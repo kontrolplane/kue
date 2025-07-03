@@ -29,7 +29,7 @@ type model struct {
 type state struct {
 	queueOverview      queueOverviewState
 	queueDetails       queueDetailsState
-	queueDelete        queueDeleteState
-	queueCreate        queueCreateState
-	queueMessageCreate queueMessageCreateState
+    queueDelete        queueDeleteState
+    queueCreate        queueCreateState
+    queueMessageCreate queueMessageCreateState
 }
