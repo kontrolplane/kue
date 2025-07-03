@@ -112,6 +112,9 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+		case key.Matches(msg, m.keys.View):
+			// open message details view
+			return m.QueueMessageDetailsSwitchPage(msg)
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueOverviewSwitchPage(msg)
 		default:
@@ -132,18 +135,22 @@ func (m model) QueueDetailsView() string {
 		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
 	}
 
-	// var messageRows []table.Row
-	// for _, message := range m.state.queueDetails.messages {
-	// 	messageRows = append(messageRows, table.Row{
-	// 		message.MessageID,
-	// 		message.Body,
-	// 		message.SentTimestamp,
-	// 		fmt.Sprintf("%d", len(message.Body)),
-	// 	})
-	// }
+	var messageRows []table.Row
+	for _, message := range m.state.queueDetails.messages {
+		preview := message.Body
+		if len(preview) > 50 {
+			preview = preview[:47] + "..."
+		}
+		messageRows = append(messageRows, table.Row{
+			message.MessageID,
+			preview,
+			message.SentTimestamp,
+			fmt.Sprintf("%d", len(message.Body)),
+		})
+	}
 
-	// m.state.queueDetails.table.SetRows(messageRows)
-	// m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+	m.state.queueDetails.table.SetRows(messageRows)
+	m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
 
 	return m.state.queueDetails.table.View()
 }
