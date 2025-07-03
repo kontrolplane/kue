@@ -1,15 +1,17 @@
 package tui
 
 import (
-	"fmt"
-	"log"
+    "encoding/json"
+    "fmt"
+    "log"
+    "strconv"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/lipgloss"
+    "github.com/charmbracelet/bubbles/key"
+    "github.com/charmbracelet/bubbles/table"
+    "github.com/charmbracelet/lipgloss"
 
-	tea "github.com/charmbracelet/bubbletea"
-	kue "github.com/kontrolplane/kue/pkg/kue"
+    tea "github.com/charmbracelet/bubbletea"
+    kue "github.com/kontrolplane/kue/pkg/kue"
 )
 
 type queueDetailsState struct {
@@ -20,10 +22,11 @@ type queueDetailsState struct {
 }
 
 var messageColumnMap = map[int]string{
-	0: "message id",
-	1: "body",
-	2: "sent",
-	3: "size",
+    0: "message id",
+    1: "body",
+    2: "sent",
+    3: "size",
+    4: "dlq",
 }
 
 var messageColumns []table.Column = []table.Column{
@@ -36,9 +39,12 @@ var messageColumns []table.Column = []table.Column{
 	{
 		Title: messageColumnMap[2], Width: 20,
 	},
-	{
-		Title: messageColumnMap[3], Width: 10,
-	},
+    {
+        Title: messageColumnMap[3], Width: 10,
+    },
+    {
+        Title: messageColumnMap[4], Width: 10,
+    },
 }
 
 func initMessageDetailsTable() table.Model {
@@ -66,16 +72,19 @@ func initMessageDetailsTable() table.Model {
 
 func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 
-	log.Println("[QueueDetailsSwitchPage]")
+    log.Println("[QueueDetailsSwitchPage]")
 
-	messages, err := kue.FetchQueueMessages(m.client, m.context, m.state.queueDetails.queue.Url, 10)
-	if err != nil {
-		m.error = fmt.Sprintf("Error fetching queue message(s): %v", err)
-	}
+    messages, err := kue.FetchQueueMessages(m.client, m.context, m.state.queueDetails.queue.Url, 10)
+    if err != nil {
+        m.error = fmt.Sprintf("Error fetching queue message(s): %v", err)
+    }
 
-	m.state.queueDetails.messages = messages
+    m.state.queueDetails.messages = messages
+    // (re)initialize the table every time we enter the page so that
+    // refreshed column definitions are applied.
+    m.state.queueDetails.table = initMessageDetailsTable()
 
-	return m.SwitchPage(queueDetails), nil
+    return m.SwitchPage(queueDetails), nil
 }
 
 func (m model) NoMessagesFound() bool {
@@ -124,6 +133,25 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 	return m, cmd
 }
 
+// parseMaxReceiveCount extracts the maxReceiveCount from a RedrivePolicy string (JSON)
+func parseMaxReceiveCount(policy string) int {
+    var max int
+    // policy JSON like {"deadLetterTargetArn":"arn:...","maxReceiveCount":"5"}
+    type rp struct {
+        MaxReceiveCount string `json:"maxReceiveCount"`
+    }
+    var tmp rp
+    if err := json.Unmarshal([]byte(policy), &tmp); err == nil {
+        max, _ = strconv.Atoi(tmp.MaxReceiveCount)
+    }
+    return max
+}
+
+func atoi(s string) int {
+    i, _ := strconv.Atoi(s)
+    return i
+}
+
 func (m model) QueueDetailsView() string {
 
 	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue.Name, m.state.queueDetails.messages)
@@ -132,18 +160,29 @@ func (m model) QueueDetailsView() string {
 		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
 	}
 
-	// var messageRows []table.Row
-	// for _, message := range m.state.queueDetails.messages {
-	// 	messageRows = append(messageRows, table.Row{
-	// 		message.MessageID,
-	// 		message.Body,
-	// 		message.SentTimestamp,
-	// 		fmt.Sprintf("%d", len(message.Body)),
-	// 	})
-	// }
+    var messageRows []table.Row
+    for _, message := range m.state.queueDetails.messages {
+        dlqWarn := ""
+        if m.state.queueDetails.queue.RedrivePolicy != "" {
+            maxReceive := parseMaxReceiveCount(m.state.queueDetails.queue.RedrivePolicy)
+            if maxReceive > 0 {
+                rc := atoi(message.ReceiveCount)
+                if rc >= maxReceive-1 {
+                    dlqWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Render(fmt.Sprintf("%d/%d", rc, maxReceive))
+                }
+            }
+        }
+        messageRows = append(messageRows, table.Row{
+            message.MessageID,
+            message.Body,
+            message.SentTimestamp,
+            fmt.Sprintf("%d", len(message.Body)),
+            dlqWarn,
+        })
+    }
 
-	// m.state.queueDetails.table.SetRows(messageRows)
-	// m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+    m.state.queueDetails.table.SetRows(messageRows)
+    m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
 
-	return m.state.queueDetails.table.View()
+    return m.state.queueDetails.table.View()
 }

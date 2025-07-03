@@ -39,6 +39,9 @@ func FetchQueueAttributes(client *sqs.Client, ctx context.Context, queueUrl stri
 		types.QueueAttributeNameApproximateNumberOfMessages:           &queue.ApproximateNumberOfMessages,
 		types.QueueAttributeNameApproximateNumberOfMessagesNotVisible: &queue.ApproximateNumberOfMessagesNotVisible,
 		types.QueueAttributeNameApproximateNumberOfMessagesDelayed:    &queue.ApproximateNumberOfMessagesDelayed,
+		// DLQ-related attributes
+		types.QueueAttributeNameRedrivePolicy:      &queue.RedrivePolicy,
+		types.QueueAttributeNameRedriveAllowPolicy: &queue.RedriveAllowPolicy,
 	}
 
 	if val, ok := attrsResult.Attributes[string(types.QueueAttributeNameCreatedTimestamp)]; ok {
