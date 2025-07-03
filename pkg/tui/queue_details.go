@@ -19,31 +19,23 @@ type queueDetailsState struct {
 	table    table.Model
 }
 
-var messageColumnMap = map[int]string{
-	0: "message id",
-	1: "body",
-	2: "sent",
-	3: "size",
+var attributeColumnMap = map[int]string{
+	0: "attribute",
+	1: "value",
 }
 
-var messageColumns []table.Column = []table.Column{
+var attributeColumns []table.Column = []table.Column{
 	{
-		Title: messageColumnMap[0], Width: 40,
+		Title: attributeColumnMap[0], Width: 30,
 	},
 	{
-		Title: messageColumnMap[1], Width: 60,
-	},
-	{
-		Title: messageColumnMap[2], Width: 20,
-	},
-	{
-		Title: messageColumnMap[3], Width: 10,
+		Title: attributeColumnMap[1], Width: 60,
 	},
 }
 
-func initMessageDetailsTable() table.Model {
-	t := table.New(
-		table.WithColumns(messageColumns),
+func initQueueDetailsTable() table.Model {
+    t := table.New(
+        table.WithColumns(attributeColumns),
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
@@ -73,9 +65,36 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 		m.error = fmt.Sprintf("Error fetching queue message(s): %v", err)
 	}
 
-	m.state.queueDetails.messages = messages
+    // Build attribute rows for table
+    q := m.state.queueDetails.queue
+    attributeRows := []table.Row{
+        {"arn", q.Arn},
+        {"created", q.CreatedTimestamp},
+        {"last modified", q.LastModified},
+        {"delay seconds", q.DelaySeconds},
+        {"max message size", q.MaxMessageSize},
+        {"message retention period", q.MessageRetentionPeriod},
+        {"receive msg wait", q.ReceiveMessageWaitTime},
+        {"visibility timeout", q.VisibilityTimeout},
+        {"approx. messages", q.ApproximateNumberOfMessages},
+        {"not visible", q.ApproximateNumberOfMessagesNotVisible},
+        {"delayed", q.ApproximateNumberOfMessagesDelayed},
+        {"fifo queue", q.FifoQueue},
+        {"content based dedup", q.ContentBasedDeduplication},
+    }
 
-	return m.SwitchPage(queueDetails), nil
+    // add tags if any
+    for k, v := range q.Tags {
+        attributeRows = append(attributeRows, table.Row{"tag:" + k, v})
+    }
+
+    m.state.queueDetails.table.SetRows(attributeRows)
+    m.state.queueDetails.table.SetCursor(0)
+
+    // Keep messages retrieval for future use but not essential for details page yet
+    m.state.queueDetails.messages = messages
+
+    return m.SwitchPage(queueDetails), nil
 }
 
 func (m model) NoMessagesFound() bool {
@@ -106,12 +125,10 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, m.keys.Down):
-			m, cmd = m.nextMessage()
-			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
-		case key.Matches(msg, m.keys.Up):
-			m, cmd = m.previousMessage()
-			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+        case key.Matches(msg, m.keys.Down):
+            m.state.queueDetails.table, cmd = m.state.queueDetails.table.Update(msg)
+        case key.Matches(msg, m.keys.Up):
+            m.state.queueDetails.table, cmd = m.state.queueDetails.table.Update(msg)
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueOverviewSwitchPage(msg)
 		default:
@@ -126,24 +143,6 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 
 func (m model) QueueDetailsView() string {
 
-	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue.Name, m.state.queueDetails.messages)
-
-	if m.NoMessagesFound() {
-		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
-	}
-
-	// var messageRows []table.Row
-	// for _, message := range m.state.queueDetails.messages {
-	// 	messageRows = append(messageRows, table.Row{
-	// 		message.MessageID,
-	// 		message.Body,
-	// 		message.SentTimestamp,
-	// 		fmt.Sprintf("%d", len(message.Body)),
-	// 	})
-	// }
-
-	// m.state.queueDetails.table.SetRows(messageRows)
-	// m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
-
-	return m.state.queueDetails.table.View()
+    log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue.Name)
+    return m.state.queueDetails.table.View()
 }
