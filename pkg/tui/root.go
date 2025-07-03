@@ -126,6 +126,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.QueueDetailsUpdate(msg)
 	case queueDelete:
 		m, cmd = m.QueueDeleteUpdate(msg)
+    case queueMessageDelete:
+        mI, cmd2 := m.QueueMessageDeleteUpdate(msg)
+        m = mI.(model)
+        cmd = cmd2
 	}
 
 	return m, cmd
@@ -145,6 +149,8 @@ func (m model) View() string {
 		c = m.QueueDetailsView()
 	case queueDelete:
 		c = m.QueueDeleteView()
+    case queueMessageDelete:
+        c = m.QueueMessageDeleteView()
 	default:
 		c = errNoPageSelected
 	}

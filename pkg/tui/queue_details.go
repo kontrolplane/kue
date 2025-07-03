@@ -13,10 +13,11 @@ import (
 )
 
 type queueDetailsState struct {
-	selected int
-	queue    kue.Queue
-	messages []kue.Message
-	table    table.Model
+    selected      int
+    queue         kue.Queue
+    messages      []kue.Message
+    table         table.Model
+    selectedRows  map[int]bool // track multi-selection by row index
 }
 
 var messageColumnMap = map[int]string{
@@ -74,8 +75,13 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	}
 
 	m.state.queueDetails.messages = messages
-
-	return m.SwitchPage(queueDetails), nil
+    // reset selections
+    m.state.queueDetails.selectedRows = map[int]bool{}
+    if m.state.queueDetails.table.Columns() == nil || len(m.state.queueDetails.table.Columns()) == 0 {
+        m.state.queueDetails.table = initMessageDetailsTable()
+    }
+    m.refreshMessageRows()
+    return m.SwitchPage(queueDetails), nil
 }
 
 func (m model) NoMessagesFound() bool {
@@ -100,18 +106,72 @@ func (m model) previousMessage() (model, tea.Cmd) {
 	return m, nil
 }
 
+// refreshMessageRows rebuilds the table rows applying selection markers.
+func (m model) refreshMessageRows() {
+    var rows []table.Row
+    for idx, message := range m.state.queueDetails.messages {
+        sel := " "
+        if m.state.queueDetails.selectedRows[idx] {
+            sel = "✓"
+        }
+        id := message.MessageID
+        if len(id) > 10 {
+            id = id[:10]
+        }
+        rows = append(rows, table.Row{
+            sel+" "+id,
+            message.Body,
+            message.SentTimestamp,
+            fmt.Sprintf("%d", len(message.Body)),
+        })
+    }
+    if m.state.queueDetails.table.Columns() == nil || len(m.state.queueDetails.table.Columns()) == 0 {
+        m.state.queueDetails.table = initMessageDetailsTable()
+    }
+    m.state.queueDetails.table.SetRows(rows)
+    m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+}
+
 func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, m.keys.Down):
+	case key.Matches(msg, m.keys.Down):
 			m, cmd = m.nextMessage()
-			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+            m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+		case key.Matches(msg, m.keys.Select):
+                // toggle selection of current row
+                idx := m.state.queueDetails.selected
+                if m.state.queueDetails.selectedRows == nil {
+                    m.state.queueDetails.selectedRows = map[int]bool{}
+                }
+                if m.state.queueDetails.selectedRows[idx] {
+                    delete(m.state.queueDetails.selectedRows, idx)
+                } else {
+                    m.state.queueDetails.selectedRows[idx] = true
+                }
+                m.refreshMessageRows()
+            case key.Matches(msg, m.keys.Delete):
+                // ctrl+d pressed, build slice of selected messages
+                var msgs []kue.Message
+                if len(m.state.queueDetails.selectedRows) == 0 {
+                    // if none selected, default to current
+                    msgs = append(msgs, m.state.queueDetails.messages[m.state.queueDetails.selected])
+                } else {
+                    for idx := range m.state.queueDetails.selectedRows {
+                        if idx < len(m.state.queueDetails.messages) {
+                            msgs = append(msgs, m.state.queueDetails.messages[idx])
+                        }
+                    }
+                }
+                m.state.queueMessageDelete.queue = m.state.queueDetails.queue
+                m.state.queueMessageDelete.messages = msgs
+                return m.QueueMessageDeleteSwitchPage(msg)
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueOverviewSwitchPage(msg)
 		default:

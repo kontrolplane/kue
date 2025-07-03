@@ -26,11 +26,11 @@
 - `↓`, `j`: down
 - `→`, `l`: right
 - `←`, `h`: left
-- `ctrl + d`: delete queue/message
+- `ctrl + d`: delete queue/message (or delete all selected messages when in message list)
 - `ctrl + n`: create queue/message
 - `?`: help
 - `enter`: view
-- `space`: select
+- `space`: select (toggle multi-select for messages)
 - `/`: filter
 
 ## demonstration
