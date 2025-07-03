@@ -1,149 +1,95 @@
 package tui
 
 import (
-	"fmt"
-	"log"
+    "context"
+    "fmt"
+    "log"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/lipgloss"
+    "strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	kue "github.com/kontrolplane/kue/pkg/kue"
+    "github.com/charmbracelet/bubbles/key"
+    tea "github.com/charmbracelet/bubbletea"
+    kue "github.com/kontrolplane/kue/pkg/kue"
 )
 
+// queueDetailsState stores the queue currently selected for displaying
+// its attributes in the details panel.
 type queueDetailsState struct {
-	selected int
-	queue    kue.Queue
-	messages []kue.Message
-	table    table.Model
+    queue kue.Queue
 }
 
-var messageColumnMap = map[int]string{
-	0: "message id",
-	1: "body",
-	2: "sent",
-	3: "size",
-}
-
-var messageColumns []table.Column = []table.Column{
-	{
-		Title: messageColumnMap[0], Width: 40,
-	},
-	{
-		Title: messageColumnMap[1], Width: 60,
-	},
-	{
-		Title: messageColumnMap[2], Width: 20,
-	},
-	{
-		Title: messageColumnMap[3], Width: 10,
-	},
-}
-
-func initMessageDetailsTable() table.Model {
-	t := table.New(
-		table.WithColumns(messageColumns),
-		table.WithFocused(true),
-		table.WithHeight(10),
-	)
-
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(false)
-
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("#ffffff")).
-		Background(lipgloss.Color("#628049")).
-		Bold(false)
-
-	t.SetStyles(s)
-	return t
-}
-
+// QueueDetailsSwitchPage is invoked from the queue overview when the user
+// presses the "view" (enter) key. It refreshes the attributes for the
+// selected queue (so the information is up-to-date) and switches to the
+// details page.
 func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+    log.Println("[QueueDetailsSwitchPage]")
 
-	log.Println("[QueueDetailsSwitchPage]")
+    q := m.state.queueDetails.queue
+    if q.Url == "" {
+        // Nothing selected; just return to overview
+        return m, nil
+    }
 
-	messages, err := kue.FetchQueueMessages(m.client, m.context, m.state.queueDetails.queue.Url, 10)
-	if err != nil {
-		m.error = fmt.Sprintf("Error fetching queue message(s): %v", err)
-	}
+    // Refresh attributes each time we open the panel to ensure fresh data.
+    refreshed, err := kue.FetchQueueAttributes(m.client, context.Background(), q.Url)
+    if err != nil {
+        m.error = fmt.Sprintf("Error fetching queue attributes: %v", err)
+    } else {
+        m.state.queueDetails.queue = refreshed
+    }
 
-	m.state.queueDetails.messages = messages
-
-	return m.SwitchPage(queueDetails), nil
+    return m.SwitchPage(queueDetails), nil
 }
 
-func (m model) NoMessagesFound() bool {
-	return m.MessagesCount() == 0
-}
-
-func (m model) MessagesCount() int {
-	return len(m.state.queueDetails.messages)
-}
-
-func (m model) nextMessage() (model, tea.Cmd) {
-	if m.state.queueDetails.selected < len(m.state.queueDetails.messages)-1 {
-		m.state.queueDetails.selected++
-	}
-	return m, nil
-}
-
-func (m model) previousMessage() (model, tea.Cmd) {
-	if m.state.queueDetails.selected > 0 {
-		m.state.queueDetails.selected--
-	}
-	return m, nil
-}
-
+// QueueDetailsUpdate handles key events while the details panel is active. The
+// only interaction needed for this read-only view is to quit back to the
+// overview.
 func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.keys.Down):
-			m, cmd = m.nextMessage()
-			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
-		case key.Matches(msg, m.keys.Up):
-			m, cmd = m.previousMessage()
-			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
-		case key.Matches(msg, m.keys.Quit):
-			return m.QueueOverviewSwitchPage(msg)
-		default:
-			m.state.queueDetails.table, cmd = m.state.queueDetails.table.Update(msg)
-		}
-	default:
-		m.state.queueDetails.table, cmd = m.state.queueDetails.table.Update(msg)
-	}
-
-	return m, cmd
+    switch msg := msg.(type) {
+    case tea.KeyMsg:
+        switch {
+        case key.Matches(msg, m.keys.Quit):
+            return m.QueueOverviewSwitchPage(msg)
+        }
+    }
+    return m, nil
 }
 
+// QueueDetailsView renders the queue attribute information in a simple
+// human-readable block.
 func (m model) QueueDetailsView() string {
+    q := m.state.queueDetails.queue
+    if q.Url == "" {
+        return "No queue selected"
+    }
 
-	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue.Name, m.state.queueDetails.messages)
+    view := fmt.Sprintf(
+        "Queue Information\n\n"+
+            "Name:  %s\n"+
+            "URL:   %s\n"+
+            "ARN:   %s\n"+
+            "Region:%s\n"+
+            "Created:%s\n"+
+            "#Msgs: %s\n",
+        q.Name,
+        q.Url,
+        q.Arn,
+        extractRegionFromArn(q.Arn),
+        q.CreatedTimestamp,
+        q.ApproximateNumberOfMessages,
+    )
 
-	if m.NoMessagesFound() {
-		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
-	}
+    return view
+}
 
-	// var messageRows []table.Row
-	// for _, message := range m.state.queueDetails.messages {
-	// 	messageRows = append(messageRows, table.Row{
-	// 		message.MessageID,
-	// 		message.Body,
-	// 		message.SentTimestamp,
-	// 		fmt.Sprintf("%d", len(message.Body)),
-	// 	})
-	// }
-
-	// m.state.queueDetails.table.SetRows(messageRows)
-	// m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
-
-	return m.state.queueDetails.table.View()
+// extractRegionFromArn pulls the AWS region from the ARN string. If the ARN is
+// malformed or empty, an empty string is returned.
+func extractRegionFromArn(arn string) string {
+    // arn:partition:service:region:account-id:resource
+    parts := strings.Split(arn, ":")
+    if len(parts) >= 4 {
+        return parts[3]
+    }
+    return ""
 }
