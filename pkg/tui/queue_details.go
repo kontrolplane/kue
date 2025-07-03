@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"log"
+	"reflect"
+	"sort"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
@@ -15,35 +17,21 @@ import (
 type queueDetailsState struct {
 	selected int
 	queue    kue.Queue
-	messages []kue.Message
 	table    table.Model
 }
 
-var messageColumnMap = map[int]string{
-	0: "message id",
-	1: "body",
-	2: "sent",
-	3: "size",
-}
-
-var messageColumns []table.Column = []table.Column{
+var attributeColumns []table.Column = []table.Column{
 	{
-		Title: messageColumnMap[0], Width: 40,
+		Title: "attribute", Width: 40,
 	},
 	{
-		Title: messageColumnMap[1], Width: 60,
-	},
-	{
-		Title: messageColumnMap[2], Width: 20,
-	},
-	{
-		Title: messageColumnMap[3], Width: 10,
+		Title: "value", Width: 60,
 	},
 }
 
-func initMessageDetailsTable() table.Model {
+func initAttributeTable() table.Model {
 	t := table.New(
-		table.WithColumns(messageColumns),
+		table.WithColumns(attributeColumns),
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
@@ -64,40 +52,63 @@ func initMessageDetailsTable() table.Model {
 	return t
 }
 
+// buildQueueAttributeRows converts a Queue struct (including tags) into rows for the attribute table.
+func buildQueueAttributeRows(q kue.Queue) []table.Row {
+	var rows []table.Row
+
+	v := reflect.ValueOf(q)
+	t := reflect.TypeOf(q)
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		valueField := v.Field(i)
+
+		// Skip zero-value fields to avoid showing empty attributes
+		val := fmt.Sprintf("%v", valueField.Interface())
+		if val == "" || val == "map[]" {
+			continue
+		}
+
+		// Skip Tags field; we'll handle separately
+		if field.Name == "Tags" {
+			continue
+		}
+
+		rows = append(rows, table.Row{field.Name, val})
+	}
+
+	// Handle tags (sorted for deterministic order)
+	if len(q.Tags) > 0 {
+		var keys []string
+		for k := range q.Tags {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			rows = append(rows, table.Row{"tag:" + k, q.Tags[k]})
+		}
+	}
+
+	return rows
+}
+
 func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 
 	log.Println("[QueueDetailsSwitchPage]")
 
-	messages, err := kue.FetchQueueMessages(m.client, m.context, m.state.queueDetails.queue.Url, 10)
+	// Refresh the queue attributes in case they have changed.
+	queue, err := kue.FetchQueueAttributes(m.client, m.context, m.state.queueDetails.queue.Url)
 	if err != nil {
-		m.error = fmt.Sprintf("Error fetching queue message(s): %v", err)
+		m.error = fmt.Sprintf("Error fetching queue attributes: %v", err)
+	} else {
+		m.state.queueDetails.queue = queue
 	}
 
-	m.state.queueDetails.messages = messages
+	rows := buildQueueAttributeRows(m.state.queueDetails.queue)
+	m.state.queueDetails.table.SetRows(rows)
+	m.state.queueDetails.table.SetCursor(0)
 
 	return m.SwitchPage(queueDetails), nil
-}
-
-func (m model) NoMessagesFound() bool {
-	return m.MessagesCount() == 0
-}
-
-func (m model) MessagesCount() int {
-	return len(m.state.queueDetails.messages)
-}
-
-func (m model) nextMessage() (model, tea.Cmd) {
-	if m.state.queueDetails.selected < len(m.state.queueDetails.messages)-1 {
-		m.state.queueDetails.selected++
-	}
-	return m, nil
-}
-
-func (m model) previousMessage() (model, tea.Cmd) {
-	if m.state.queueDetails.selected > 0 {
-		m.state.queueDetails.selected--
-	}
-	return m, nil
 }
 
 func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
@@ -106,12 +117,6 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, m.keys.Down):
-			m, cmd = m.nextMessage()
-			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
-		case key.Matches(msg, m.keys.Up):
-			m, cmd = m.previousMessage()
-			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueOverviewSwitchPage(msg)
 		default:
@@ -125,25 +130,6 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueDetailsView() string {
-
-	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue.Name, m.state.queueDetails.messages)
-
-	if m.NoMessagesFound() {
-		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
-	}
-
-	// var messageRows []table.Row
-	// for _, message := range m.state.queueDetails.messages {
-	// 	messageRows = append(messageRows, table.Row{
-	// 		message.MessageID,
-	// 		message.Body,
-	// 		message.SentTimestamp,
-	// 		fmt.Sprintf("%d", len(message.Body)),
-	// 	})
-	// }
-
-	// m.state.queueDetails.table.SetRows(messageRows)
-	// m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
-
+	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue.Name)
 	return m.state.queueDetails.table.View()
 }
