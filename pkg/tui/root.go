@@ -104,10 +104,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
-	case tea.WindowSizeMsg:
-		log.Printf("[Update] Window size changed to %dx%d", msg.Width, msg.Height)
-		m.width = msg.Width
-		m.height = msg.Height
+case tea.WindowSizeMsg:
+    log.Printf("[Update] Window size changed to %dx%d", msg.Width, msg.Height)
+    m.width = msg.Width
+    m.height = msg.Height
+
+    // Dynamically adjust the attribute table height so that it scales with the
+    // current terminal size. This allows vertical scrolling when the list of
+    // attributes is longer than the available space (issue #43).
+    if m.state.queueDetails.table != nil {
+        // Reserve a few lines for header, spacing and the help view.
+        const reserved = 8
+        h := msg.Height - reserved
+        if h < 5 {
+            h = 5 // keep a sensible minimum to avoid a zero-height table
+        }
+        m.state.queueDetails.table.SetHeight(h)
+    }
 
 	case tea.KeyMsg:
 		log.Printf("[Update] Key pressed: %s", msg.String())
