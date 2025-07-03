@@ -1,49 +1,44 @@
 <p align="center">
-  <h1 align="center">
-    <a href="https://kontrolplane.dev">
-      <img width="1500" alt="kontrolplane header" src="./assets/kontrolplane-header.svg">
-    </a>
-  </h1>
+  <a href="https://kontrolplane.dev">
+    <img width="1500" alt="kontrolplane header" src="./assets/kontrolplane-header.svg">
+  </a>
 </p>
 
-`Kue` is a terminal user interface (tui) application designed for managing aws sqs (simple queue service). It provides an intuitive and efficient way to interact with your sqs queues directly from the terminal. With Kue, you can easily create, delete, and manage messages within your queues, making it an essential tool for engineers who prefer working within a terminal environment.
+<h1 align="center">Kue</h1>
 
-<p align="center">
-  <img width="1500" alt="kue cassette" src="./assets/cassette.gif">
-</p>
+> A Terminal User Interface for Amazon SQS
 
-## views
+[![Go Reference](https://pkg.go.dev/badge/github.com/kontrolplane/kue.svg)](https://pkg.go.dev/github.com/kontrolplane/kue)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/kontrolplane/kue/go.yml?branch=main)
 
-- `queue`: overview, details<sup>1</sup>, creation<sup>1</sup>, delete
-- `message`: details<sup>1</sup>, creation<sup>1</sup>, delete<sup>1</sup>
+Kue provides an intuitive and efficient way to interact with your SQS queues directly from the terminal. Quickly list queues, inspect messages, and perform operations without ever leaving your keyboard.
 
-<sup>1</sup>: work in progress
+---
 
-## keybindings
+## Documentation
 
-- `q`, `esc`, `ctrl+c`: quit/return
-- `↑`, `k`: up
-- `↓`, `j`: down
-- `→`, `l`: right
-- `←`, `h`: left
-- `ctrl + d`: delete queue/message
-- `ctrl + n`: create queue/message
-- `?`: help
-- `enter`: view
-- `space`: select
-- `/`: filter
+The documentation has been split into multiple focused pages:
 
-## demonstration
+| Topic | Description |
+|-------|-------------|
+| [Getting Started](./docs/GettingStarted.md) | Quick start guide |
+| [Installation](./docs/Installation.md) | All installation methods |
+| [Usage](./docs/Usage.md) | Keybindings, views, demos |
+| [Configuration](./docs/Configuration.md) | Environment variables & flags |
+| [Contributing](./docs/Contributing.md) | Development guide |
+| [FAQ](./docs/FAQ.md) | Common questions |
 
-`queue overview`
-<p align="center">
-  <img width="1500" alt="kue queue overview" src="./assets/pages/queue/overview.png">
-</p>
+---
 
-`queue delete`
-<p align="center">
-  <img width="1500" alt="kue queue delete" src="./assets/pages/queue/delete.png">
-</p>
+## Quick Installation
+
+```
+go install github.com/kontrolplane/kue@latest
+```
+
+Then run `kue`!
+
+---
 
 ## Contributors
 
