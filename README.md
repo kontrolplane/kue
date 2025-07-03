@@ -14,10 +14,10 @@
 
 ## views
 
-- `queue`: overview, details<sup>1</sup>, creation<sup>1</sup>, delete
-- `message`: details<sup>1</sup>, creation<sup>1</sup>, delete<sup>1</sup>
+- `queue`: overview, [details](https://github.com/kontrolplane/kue/issues/30), [creation](https://github.com/kontrolplane/kue/issues/31), delete
+- `message`: [details](https://github.com/kontrolplane/kue/issues/32), [creation](https://github.com/kontrolplane/kue/issues/33), [delete](https://github.com/kontrolplane/kue/issues/34)
 
-<sup>1</sup>: work in progress
+> Detailed tracking for upcoming features is now managed in individual GitHub issues instead of this README. See the linked issues above for progress updates.
 
 ## keybindings
 
