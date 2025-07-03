@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kontrolplane/kue/pkg/client"
+	"github.com/kontrolplane/kue/pkg/tui/commands"
 
 	tea "github.com/charmbracelet/bubbletea"
 	keys "github.com/kontrolplane/kue/pkg/keys"
@@ -118,6 +120,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle global messages (spinner/toast)
+	switch t := msg.(type) {
+	case QueueCreateResultMsg:
+		m.creatingQueue = false
+		if t.Err != nil {
+			m.toast = fmt.Sprintf("❌ %v", t.Err)
+		} else {
+			m.toast = "✅ Queue created!"
+			// Prepend new queue to slice or refresh list
+			m.state.queueOverview.queues = append([]kue.Queue{t.Queue}, m.state.queueOverview.queues...)
+		}
+		return m, commands.ClearToastCmd(3 * time.Second)
+	case ToastClearMsg:
+		m.toast = ""
+	}
+
+	// update spinner if active
+	if m.creatingQueue {
+		var scmd tea.Cmd
+		m.spinner, scmd = m.spinner.Update(msg)
+		if scmd != nil {
+			return m, scmd
+		}
+	}
+
 	var cmd tea.Cmd
 	switch m.page {
 	case queueOverview:
@@ -152,6 +179,14 @@ func (m model) View() string {
 	if m.error != "" {
 		log.Printf("[View] Rendering error: %s", m.error)
 		c = m.ErrorView()
+	}
+
+	// add spinner and toast overlays
+	if m.creatingQueue {
+		c = m.spinner.View() + " Creating queue...\n" + c
+	}
+	if m.toast != "" {
+		c = fmt.Sprintf("%s\n\n%s", c, m.toast)
 	}
 
 	content := lipgloss.NewStyle().

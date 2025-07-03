@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/spinner"
 
 	tea "github.com/charmbracelet/bubbletea"
 	keys "github.com/kontrolplane/kue/pkg/keys"
@@ -24,6 +25,11 @@ type model struct {
 	help        help.Model
 	table       tea.Model
 	error       string
+
+	// optimistic UI fields
+	spinner       spinner.Model
+	creatingQueue bool
+	toast         string
 }
 
 type state struct {
