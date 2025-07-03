@@ -84,8 +84,8 @@ var Keys = KeyMap{
 		key.WithHelp("ctrl+n", "create"),
 	),
 	Delete: key.NewBinding(
-		key.WithKeys("ctrl+d"),
-		key.WithHelp("ctrl+d", "delete"),
+        key.WithKeys("ctrl+d", "d"),
+        key.WithHelp("d", "delete"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "esc", "ctrl+c"),

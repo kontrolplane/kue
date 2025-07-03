@@ -75,6 +75,19 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 
 	m.state.queueDetails.messages = messages
 
+    // Build table rows
+    var messageRows []table.Row
+    for _, message := range messages {
+        messageRows = append(messageRows, table.Row{
+            message.MessageID,
+            message.Body,
+            message.SentTimestamp,
+            fmt.Sprintf("%d", len(message.Body)),
+        })
+    }
+    m.state.queueDetails.table.SetRows(messageRows)
+    m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+
 	return m.SwitchPage(queueDetails), nil
 }
 
@@ -112,8 +125,16 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
-		case key.Matches(msg, m.keys.Quit):
-			return m.QueueOverviewSwitchPage(msg)
+        case key.Matches(msg, m.keys.Delete):
+            if m.MessagesCount() > 0 {
+                idx := m.state.queueDetails.selected
+                m.state.queueMessageDelete.queue = m.state.queueDetails.queue
+                m.state.queueMessageDelete.message = m.state.queueDetails.messages[idx]
+                m.state.queueMessageDelete.selected = 0
+                return m.QueueMessageDeleteSwitchPage(msg)
+            }
+        case key.Matches(msg, m.keys.Quit):
+            return m.QueueOverviewSwitchPage(msg)
 		default:
 			m.state.queueDetails.table, cmd = m.state.queueDetails.table.Update(msg)
 		}
