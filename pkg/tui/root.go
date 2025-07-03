@@ -69,13 +69,14 @@ func NewModel(
 				table:    queueOverviewTable,
 				queues:   queues,
 			},
-			queueDetails: queueDetailsState{
-				selected: 0,
-				messages: messages,
-			},
-			queueDelete: queueDeleteState{
-				selected: 0,
-			},
+                queueDetails: queueDetailsState{
+                    selected: 0,
+                    messages: messages,
+                },
+                queueDelete: queueDeleteState{
+                    selected: 0,
+                },
+                queueMessageDetails: queueMessageDetailsState{},
 		},
 	}
 
@@ -124,8 +125,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.QueueOverviewUpdate(msg)
 	case queueDetails:
 		m, cmd = m.QueueDetailsUpdate(msg)
-	case queueDelete:
-		m, cmd = m.QueueDeleteUpdate(msg)
+    case queueMessageDetails:
+        m, cmd = m.QueueMessageDetailsUpdate(msg)
+    case queueDelete:
+        m, cmd = m.QueueDeleteUpdate(msg)
 	}
 
 	return m, cmd
@@ -143,10 +146,12 @@ func (m model) View() string {
 		c = m.QueueOverviewView()
 	case queueDetails:
 		c = m.QueueDetailsView()
-	case queueDelete:
-		c = m.QueueDeleteView()
-	default:
-		c = errNoPageSelected
+    case queueMessageDetails:
+        c = m.QueueMessageDetailsView()
+    case queueDelete:
+        c = m.QueueDeleteView()
+    default:
+        c = errNoPageSelected
 	}
 
 	if m.error != "" {
