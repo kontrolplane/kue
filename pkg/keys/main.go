@@ -9,19 +9,20 @@ type KeyMap struct {
 	Down   key.Binding
 	Left   key.Binding
 	Right  key.Binding
-	Help   key.Binding
-	View   key.Binding
-	Select key.Binding
-	Filter key.Binding
-	Create key.Binding
-	Delete key.Binding
-	Quit   key.Binding
+    Help     key.Binding
+    Advanced key.Binding
+    View     key.Binding
+    Select   key.Binding
+    Filter   key.Binding
+    Create   key.Binding
+    Delete   key.Binding
+    Quit     key.Binding
 }
 
 // ShortHelp returns keybindings to be shown in the mini help view. It's part
 // of the key.Map interface.
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.View, k.Help, k.Filter, k.Quit}
+    return []key.Binding{k.View, k.Help, k.Advanced, k.Filter, k.Quit}
 }
 
 // FullHelp returns keybindings for the expanded help view. It's part of the
@@ -34,15 +35,16 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Left,
 			k.Right,
 		},
-		{ // second column
-			k.View,
-			k.Select,
-			k.Help,
-			k.Filter,
-			k.Create,
-			k.Delete,
-			k.Quit,
-		},
+        { // second column
+            k.View,
+            k.Select,
+            k.Help,
+            k.Advanced,
+            k.Filter,
+            k.Create,
+            k.Delete,
+            k.Quit,
+        },
 	}
 }
 
@@ -63,10 +65,14 @@ var Keys = KeyMap{
 		key.WithKeys("right", "l"),
 		key.WithHelp("→ | l", "right"),
 	),
-	Help: key.NewBinding(
-		key.WithKeys("?"),
-		key.WithHelp("?", "help"),
-	),
+    Help: key.NewBinding(
+        key.WithKeys("?"),
+        key.WithHelp("?", "help"),
+    ),
+    Advanced: key.NewBinding(
+        key.WithKeys("a"),
+        key.WithHelp("a", "toggle advanced"),
+    ),
 	View: key.NewBinding(
 		key.WithKeys("enter"),
 		key.WithHelp("enter", "view"),

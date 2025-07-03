@@ -29,9 +29,25 @@
 - `ctrl + d`: delete queue/message
 - `ctrl + n`: create queue/message
 - `?`: help
+- `a`: toggle advanced (create queue form)
 - `enter`: view
 - `space`: select
 - `/`: filter
+
+## Advanced queue creation options ✨
+
+When creating a queue (`ctrl+n` from the queue overview) press **`a`** to expand the *Advanced settings* section.
+Here you can optionally configure:
+
+| Option | Description |
+| ------ | ----------- |
+| Visibility timeout (seconds) | How long a received message is hidden from other consumers before becoming visible again (0 – 43,200) |
+| Message retention period (seconds) | How long SQS retains a message that is not deleted (60 – 1,209,600) |
+| DLQ ARN | ARN of a dead-letter queue to attach. Provide together with *DLQ max receive count*. |
+| DLQ max receive count | After this many receives the message is moved to the DLQ (defaults to 5). |
+| KMS Key ID | Customer managed KMS key ID/ARN for server-side encryption. Leave empty to use the default SQS-managed key. |
+
+Only fields you fill in are sent to AWS – leaving a field blank keeps the AWS default.
 
 ## demonstration
 
