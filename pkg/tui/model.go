@@ -26,10 +26,11 @@ type model struct {
 	error       string
 }
 
-type state struct {
-	queueOverview      queueOverviewState
-	queueDetails       queueDetailsState
-	queueDelete        queueDeleteState
-	queueCreate        queueCreateState
-	queueMessageCreate queueMessageCreateState
-}
+	type state struct {
+		queueOverview      queueOverviewState
+		queueDetails       queueDetailsState
+		queueDelete        queueDeleteState
+		queueCreate        queueCreateState
+		queueMessageCreate queueMessageCreateState
+		queueMessageDelete queueMessageDeleteState
+	}
