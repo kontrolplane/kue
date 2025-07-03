@@ -15,13 +15,14 @@ type KeyMap struct {
 	Filter key.Binding
 	Create key.Binding
 	Delete key.Binding
+	Copy   key.Binding
 	Quit   key.Binding
 }
 
 // ShortHelp returns keybindings to be shown in the mini help view. It's part
 // of the key.Map interface.
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.View, k.Help, k.Filter, k.Quit}
+	return []key.Binding{k.View, k.Copy, k.Help, k.Filter, k.Quit}
 }
 
 // FullHelp returns keybindings for the expanded help view. It's part of the
@@ -40,8 +41,9 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Help,
 			k.Filter,
 			k.Create,
-			k.Delete,
-			k.Quit,
+		k.Delete,
+		k.Copy,
+		k.Quit,
 		},
 	}
 }
@@ -86,6 +88,10 @@ var Keys = KeyMap{
 	Delete: key.NewBinding(
 		key.WithKeys("ctrl+d"),
 		key.WithHelp("ctrl+d", "delete"),
+	),
+	Copy: key.NewBinding(
+		key.WithKeys("y"),
+		key.WithHelp("y", "copy"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "esc", "ctrl+c"),

@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"github.com/charmbracelet/bubbles/key"
+	
+	util "github.com/kontrolplane/kue/pkg/util"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 
@@ -112,6 +114,16 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+		case key.Matches(msg, m.keys.Copy):
+			selected := m.state.queueDetails.selected
+			if selected < len(m.state.queueDetails.messages) {
+				msgObj := m.state.queueDetails.messages[selected]
+				if err := util.CopyToClipboard(msgObj.Body); err != nil {
+					m.error = fmt.Sprintf("Copy failed: %v", err)
+				} else {
+					m.error = "Copied message body to clipboard"
+				}
+			}
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueOverviewSwitchPage(msg)
 		default:

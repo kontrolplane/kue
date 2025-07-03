@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"github.com/charmbracelet/bubbles/key"
+	
+	util "github.com/kontrolplane/kue/pkg/util"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 
@@ -153,6 +155,14 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 			return m.QueueDetailsSwitchPage(msg)
 		case key.Matches(msg, m.keys.Create):
 			return m.QueueCreateSwitchPage(msg)
+		case key.Matches(msg, m.keys.Copy):
+			selected := m.state.queueOverview.selected
+			queue := m.state.queueOverview.queues[selected]
+			if err := util.CopyToClipboard(queue.Url); err != nil {
+				m.error = fmt.Sprintf("Copy failed: %v", err)
+			} else {
+				m.error = fmt.Sprintf("Copied queue URL to clipboard")
+			}
 		case key.Matches(msg, m.keys.Delete):
 			selected := m.state.queueOverview.selected
 			m.state.queueDelete.queue = m.state.queueOverview.queues[selected]
