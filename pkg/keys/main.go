@@ -80,8 +80,8 @@ var Keys = KeyMap{
 		key.WithHelp("/", "filter"),
 	),
 	Create: key.NewBinding(
-		key.WithKeys("ctrl+n"),
-		key.WithHelp("ctrl+n", "create"),
+		key.WithKeys("c", "ctrl+n"),
+		key.WithHelp("c", "create"),
 	),
 	Delete: key.NewBinding(
 		key.WithKeys("ctrl+d"),
