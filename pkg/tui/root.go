@@ -73,9 +73,10 @@ func NewModel(
 				selected: 0,
 				messages: messages,
 			},
-			queueDelete: queueDeleteState{
-				selected: 0,
-			},
+            queueDelete: queueDeleteState{
+                selected: 0,
+            },
+            queueMessageDelete: messageDeleteState{},
 		},
 	}
 
@@ -119,14 +120,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	switch m.page {
-	case queueOverview:
-		m, cmd = m.QueueOverviewUpdate(msg)
-	case queueDetails:
-		m, cmd = m.QueueDetailsUpdate(msg)
-	case queueDelete:
-		m, cmd = m.QueueDeleteUpdate(msg)
-	}
+    switch m.page {
+    case queueOverview:
+        m, cmd = m.QueueOverviewUpdate(msg)
+    case queueDetails:
+        m, cmd = m.QueueDetailsUpdate(msg)
+    case queueDelete:
+        m, cmd = m.QueueDeleteUpdate(msg)
+    case queueMessageDelete:
+        m, cmd = m.QueueMessageDeleteUpdate(msg)
+    }
 
 	return m, cmd
 }
@@ -138,16 +141,18 @@ func (m model) View() string {
 	var f string = m.help.View(m.keys)
 	var c string
 
-	switch m.page {
-	case queueOverview:
-		c = m.QueueOverviewView()
-	case queueDetails:
-		c = m.QueueDetailsView()
-	case queueDelete:
-		c = m.QueueDeleteView()
-	default:
-		c = errNoPageSelected
-	}
+    switch m.page {
+    case queueOverview:
+        c = m.QueueOverviewView()
+    case queueDetails:
+        c = m.QueueDetailsView()
+    case queueDelete:
+        c = m.QueueDeleteView()
+    case queueMessageDelete:
+        c = m.QueueMessageDeleteView()
+    default:
+        c = errNoPageSelected
+    }
 
 	if m.error != "" {
 		log.Printf("[View] Rendering error: %s", m.error)
