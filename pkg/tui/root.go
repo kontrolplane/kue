@@ -27,7 +27,6 @@ func NewModel(
 
 	var error string
 	var queues []kue.Queue
-	var messages []kue.Message
 
 	context := context.Background()
 
@@ -69,10 +68,9 @@ func NewModel(
 				table:    queueOverviewTable,
 				queues:   queues,
 			},
-			queueDetails: queueDetailsState{
-				selected: 0,
-				messages: messages,
-			},
+            queueDetails: queueDetailsState{
+                selected: 0,
+            },
 			queueDelete: queueDeleteState{
 				selected: 0,
 			},
