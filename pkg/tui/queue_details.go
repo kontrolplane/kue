@@ -62,19 +62,19 @@ func renderAttributesTable(q kue.Queue) string {
 			"last modified", q.LastModified,
 		},
 		{
-			"approximate number of messages", q.ApproximateNumberOfMessages,
+			"approx. # messages", q.ApproximateNumberOfMessages,
 		},
 		{
-			"approximate number of messages in flight", q.ApproximateNumberOfMessagesNotVisible,
+			"approx. # not visible", q.ApproximateNumberOfMessagesNotVisible,
 		},
 		{
-			"delayed", q.ApproximateNumberOfMessagesDelayed,
+			"approx. # delayed", q.ApproximateNumberOfMessagesDelayed,
 		},
 		{
-			"delay secondes", q.DelaySeconds,
+			"delay seconds", q.DelaySeconds,
 		},
 		{
-			"message retention period", q.MessageRetentionPeriod,
+			"retention period", q.MessageRetentionPeriod,
 		},
 		{
 			"visibility timeout", q.VisibilityTimeout,
