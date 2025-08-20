@@ -37,12 +37,18 @@
 
 `queue overview`
 <p align="center">
-  <img width="1500" alt="kue queue overview" src="./assets/pages/queue/overview.png">
+  <img width="2400" alt="kue queue overview" src="./assets/pages/queue/overview.png">
 </p>
+
+`queue details`
+<p align="center">
+  <img width="2400" alt="kue queue details" src="./assets/pages/queue/details.png">
+</p>
+
 
 `queue delete`
 <p align="center">
-  <img width="1500" alt="kue queue delete" src="./assets/pages/queue/delete.png">
+  <img width="2400" alt="kue queue delete" src="./assets/pages/queue/delete.png">
 </p>
 
 ## Contributors

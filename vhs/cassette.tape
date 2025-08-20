@@ -1,6 +1,6 @@
 Set FontSize 20
-Set Width 1800
-Set Height 900
+Set Width 2400
+Set Height 1000
 Set BorderRadius 10
 Set Margin 30
 Set MarginFill "#536c54"
@@ -21,6 +21,17 @@ Enter
 Sleep 5s
 
 Screenshot ./assets/pages/queue/overview.png
+
+Sleep 2s
+Enter
+Sleep 2s
+Down
+Sleep 1s
+Down
+
+Screenshot ./assets/pages/queue/details.png
+
+Type "q"
 
 Sleep 1s
 Down

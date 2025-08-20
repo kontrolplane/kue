@@ -70,8 +70,9 @@ func NewModel(
 				queues:   queues,
 			},
 			queueDetails: queueDetailsState{
-				selected: 0,
-				messages: messages,
+				selected:        0,
+				messages:        messages,
+				attributesTable: "",
 			},
 			queueDelete: queueDeleteState{
 				selected: 0,
