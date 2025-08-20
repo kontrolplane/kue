@@ -17,26 +17,26 @@ type queueDetailsState struct {
 	selected        int
 	queue           kue.Queue
 	messages        []kue.Message
-	table           table.Model
 	attributesTable string
+	messagesTable   table.Model
 }
 
 var messageColumnMap = map[int]string{
-	0: "message id",
+	0: "message identifier",
 	1: "body",
-	2: "sent",
+	2: "sent timestamp",
 	3: "size",
 }
 
 var messageColumns []table.Column = []table.Column{
 	{
-		Title: messageColumnMap[0], Width: 40,
+		Title: messageColumnMap[0], Width: 30,
 	},
 	{
 		Title: messageColumnMap[1], Width: 60,
 	},
 	{
-		Title: messageColumnMap[2], Width: 20,
+		Title: messageColumnMap[2], Width: 30,
 	},
 	{
 		Title: messageColumnMap[3], Width: 10,
@@ -44,51 +44,76 @@ var messageColumns []table.Column = []table.Column{
 }
 
 func renderAttributesTable(q kue.Queue) string {
-
-	attrs := []struct {
-		k string
-		v string
-	}{
-		{
-			"name", q.Name,
-		},
-		{
-			"arn", q.Arn,
-		},
-		{
-			"created at", q.CreatedTimestamp,
-		},
-		{
-			"last modified", q.LastModified,
-		},
-		{
-			"approx. # messages", q.ApproximateNumberOfMessages,
-		},
-		{
-			"approx. # not visible", q.ApproximateNumberOfMessagesNotVisible,
-		},
-		{
-			"approx. # delayed", q.ApproximateNumberOfMessagesDelayed,
-		},
-		{
-			"delay seconds", q.DelaySeconds,
-		},
-		{
-			"retention period", q.MessageRetentionPeriod,
-		},
-		{
-			"visibility timeout", q.VisibilityTimeout,
-		},
+	columnsLeft := []table.Column{
+		{Title: "attribute", Width: 30},
+		{Title: "value", Width: 60},
 	}
 
-	var lines []string
-	header := lipgloss.NewStyle().Bold(true).Render("attribute") + "\t" + lipgloss.NewStyle().Bold(true).Render("value")
-	lines = append(lines, header)
-	for _, a := range attrs {
-		lines = append(lines, fmt.Sprintf("%s\t%s", a.k, a.v))
+	columnsRight := []table.Column{
+		{Title: "attribute", Width: 30},
+		{Title: "value", Width: 10},
 	}
 
-	return strings.Join(lines, "\n") + "\n\n"
+	rowsLeft := []table.Row{
+		{"name", q.Name},
+		{"arn", q.Arn},
+		{"created at", q.CreatedTimestamp},
+		{"last modified", q.LastModified},
+		{"visibility timeout", q.VisibilityTimeout},
+	}
+
+	rowsRight := []table.Row{
+		{"number of messages", q.ApproximateNumberOfMessages},
+		{"number not visible", q.ApproximateNumberOfMessagesNotVisible},
+		{"number delayed", q.ApproximateNumberOfMessagesDelayed},
+		{"delay seconds", q.DelaySeconds},
+		{"retention period", q.MessageRetentionPeriod},
+	}
+
+	leftTable := table.New(
+		table.WithColumns(columnsLeft),
+		table.WithRows(rowsLeft),
+		table.WithFocused(false),
+		table.WithHeight(len(rowsLeft)+1),
+	)
+
+	rightTable := table.New(
+		table.WithColumns(columnsRight),
+		table.WithRows(rowsRight),
+		table.WithFocused(false),
+		table.WithHeight(len(rowsRight)+1),
+	)
+
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.HiddenBorder())
+
+	s.Selected = s.Selected.
+		Foreground(lipgloss.NoColor{}).
+		Bold(false)
+
+	leftTable.SetStyles(s)
+	rightTable.SetStyles(s)
+
+	leftView := lipgloss.NewStyle().Render(stripViewBeforeToken(leftTable.View(), rowsLeft[0][0]))
+	rightView := lipgloss.NewStyle().Render(stripViewBeforeToken(rightTable.View(), rowsRight[0][0]))
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
+}
+
+// stripViewBeforeToken removes everything before the first line that contains
+// the provided token. This effectively drops the header and any blank line
+// above the first data row.
+func stripViewBeforeToken(view string, token string) string {
+	lines := strings.Split(view, "\n")
+	start := 0
+	for i, line := range lines {
+		if strings.Contains(line, token) {
+			start = i
+			break
+		}
+	}
+	return strings.Join(lines[start:], "\n")
 }
 
 func initMessageDetailsTable() table.Model {
@@ -143,9 +168,9 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 		})
 	}
 
-	m.state.queueDetails.table = initMessageDetailsTable()
-	m.state.queueDetails.table.SetRows(messageRows)
-	m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+	m.state.queueDetails.messagesTable = initMessageDetailsTable()
+	m.state.queueDetails.messagesTable.SetRows(messageRows)
+	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
 
 	return m.SwitchPage(queueDetails), nil
 }
@@ -180,29 +205,31 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Down):
 			m, cmd = m.nextMessage()
-			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousMessage()
-			m.state.queueDetails.table.SetCursor(m.state.queueDetails.selected)
+			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueOverviewSwitchPage(msg)
 		default:
-			m.state.queueDetails.table, cmd = m.state.queueDetails.table.Update(msg)
+			m.state.queueDetails.messagesTable, cmd = m.state.queueDetails.messagesTable.Update(msg)
 		}
 	default:
-		m.state.queueDetails.table, cmd = m.state.queueDetails.table.Update(msg)
+		m.state.queueDetails.messagesTable, cmd = m.state.queueDetails.messagesTable.Update(msg)
 	}
 
 	return m, cmd
 }
 
 func (m model) QueueDetailsView() string {
-
 	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue.Name, m.state.queueDetails.messages)
 
 	if m.NoMessagesFound() {
 		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
 	}
 
-	return m.state.queueDetails.attributesTable + m.state.queueDetails.table.View()
+	attributesTableView := m.state.queueDetails.attributesTable
+	messagesTableView := m.state.queueDetails.messagesTable.View()
+
+	return attributesTableView + "\n\n\n" + messagesTableView
 }

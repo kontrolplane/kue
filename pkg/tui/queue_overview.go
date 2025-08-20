@@ -22,7 +22,7 @@ var columnMap = map[int]string{
 	0: "queue name",
 	1: "last modified",
 	2: "available",
-	3: "in flight",
+	3: "not visible",
 	4: "delayed",
 }
 
