@@ -120,14 +120,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	switch m.page {
-	case queueOverview:
-		m, cmd = m.QueueOverviewUpdate(msg)
-	case queueDetails:
-		m, cmd = m.QueueDetailsUpdate(msg)
-	case queueDelete:
-		m, cmd = m.QueueDeleteUpdate(msg)
-	}
+    switch m.page {
+    case queueOverview:
+        m, cmd = m.QueueOverviewUpdate(msg)
+    case queueDetails:
+        m, cmd = m.QueueDetailsUpdate(msg)
+    case queueDelete:
+        m, cmd = m.QueueDeleteUpdate(msg)
+    case queueCreate:
+        m, cmd = m.QueueCreateUpdate(msg)
+    }
 
 	return m, cmd
 }
@@ -142,10 +144,12 @@ func (m model) View() string {
 	switch m.page {
 	case queueOverview:
 		c = m.QueueOverviewView()
-	case queueDetails:
-		c = m.QueueDetailsView()
-	case queueDelete:
-		c = m.QueueDeleteView()
+    case queueDetails:
+        c = m.QueueDetailsView()
+    case queueDelete:
+        c = m.QueueDeleteView()
+    case queueCreate:
+        c = m.QueueCreateView()
 	default:
 		c = errNoPageSelected
 	}
