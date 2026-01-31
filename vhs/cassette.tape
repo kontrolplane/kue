@@ -3,7 +3,6 @@ Set Width 2400
 Set Height 1000
 Set BorderRadius 10
 Set Margin 30
-Set MarginFill "#536c54"
 Set Framerate 30
 
 Output ./assets/cassette.gif
