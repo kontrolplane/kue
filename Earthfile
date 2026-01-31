@@ -16,6 +16,10 @@ compile:
     RUN go build -o build/kontrolplane/kue main.go
     SAVE ARTIFACT build/kontrolplane/kue AS LOCAL build/kontrolplane/kue
 
+local:
+    LOCALLY
+    RUN go build -o build/kontrolplane/kue main.go
+
 container:
     COPY +compile/kue ./kontrolplane/kue
     ENTRYPOINT ["./kontrolplane/kue"]
