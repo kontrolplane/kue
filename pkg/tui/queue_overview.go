@@ -26,6 +26,21 @@ var columnMap = map[int]string{
 	4: "delayed",
 }
 
+// defaultTableStyles returns the standard styles used for tables in the TUI.
+func defaultTableStyles() table.Styles {
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(false)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("#ffffff")).
+		Background(lipgloss.Color("#628049")).
+		Bold(false)
+	return s
+}
+
 var queueOverviewColumns []table.Column = []table.Column{
 	{
 		Title: columnMap[0], Width: 40,
@@ -86,28 +101,19 @@ func (m model) QueuesCount() int {
 }
 
 // Helper function to initialize the queue overview table
-func initQueueOverviewTable() table.Model {
+func initQueueOverviewTable(height int) table.Model {
+	// Ensure minimum height
+	if height < 5 {
+		height = 5
+	}
 
 	t := table.New(
 		table.WithColumns(queueOverviewColumns),
 		table.WithFocused(true),
-		table.WithHeight(10),
+		table.WithHeight(height),
 	)
 
-	s := table.DefaultStyles()
-
-	s.Header = s.Header.
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(false)
-
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("#ffffff")).
-		Background(lipgloss.Color("#628049")).
-		Bold(false)
-
-	t.SetStyles(s)
+	t.SetStyles(defaultTableStyles())
 
 	return t
 }

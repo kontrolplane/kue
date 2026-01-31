@@ -116,26 +116,19 @@ func stripViewBeforeToken(view string, token string) string {
 	return strings.Join(lines[start:], "\n")
 }
 
-func initMessageDetailsTable() table.Model {
+func initMessageDetailsTable(height int) table.Model {
+	// Ensure minimum height
+	if height < 5 {
+		height = 5
+	}
+
 	t := table.New(
 		table.WithColumns(messageColumns),
 		table.WithFocused(true),
-		table.WithHeight(10),
+		table.WithHeight(height),
 	)
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(false)
-
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("#ffffff")).
-		Background(lipgloss.Color("#628049")).
-		Bold(false)
-
-	t.SetStyles(s)
+	t.SetStyles(defaultTableStyles())
 	return t
 }
 
@@ -168,7 +161,21 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 		})
 	}
 
-	m.state.queueDetails.messagesTable = initMessageDetailsTable()
+	// Calculate available height for message table
+	// If we have window dimensions, use them; otherwise use default
+	messageTableHeight := 10
+	if m.height > 0 {
+		headerHeight := 3
+		footerHeight := lipgloss.Height(m.help.View(m.keys))
+		padding := 6
+		availableHeight := m.height - headerHeight - footerHeight - padding
+		messageTableHeight = availableHeight - 8 // Reserve ~8 lines for attributes
+		if messageTableHeight < 5 {
+			messageTableHeight = 5
+		}
+	}
+
+	m.state.queueDetails.messagesTable = initMessageDetailsTable(messageTableHeight)
 	m.state.queueDetails.messagesTable.SetRows(messageRows)
 	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
 

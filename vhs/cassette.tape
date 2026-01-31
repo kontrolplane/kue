@@ -54,6 +54,4 @@ Sleep 2s
 Enter
 Sleep 1s
 
-
-
 Sleep 30s

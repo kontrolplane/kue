@@ -49,7 +49,8 @@ func NewModel(
 		queues[i] = queue
 	}
 
-	queueOverviewTable := initQueueOverviewTable()
+	// Initialize with default height (will be updated by first WindowSizeMsg)
+	queueOverviewTable := initQueueOverviewTable(10)
 
 	m := model{
 		projectName: projectName,
@@ -110,6 +111,60 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		log.Printf("[Update] Window size changed to %dx%d", msg.Width, msg.Height)
 		m.width = msg.Width
 		m.height = msg.Height
+
+		// Update help width
+		m.help.Width = msg.Width
+
+		// Calculate available height for content
+		// Account for: header (3 lines), footer/help (variable), padding (6 lines)
+		headerHeight := 3
+		footerHeight := lipgloss.Height(m.help.View(m.keys))
+		padding := 6
+		availableHeight := msg.Height - headerHeight - footerHeight - padding
+
+		// Ensure minimum height
+		if availableHeight < 5 {
+			availableHeight = 5
+		}
+
+		log.Printf("[Update] Available height for tables: %d (total: %d, header: %d, footer: %d, padding: %d)",
+			availableHeight, msg.Height, headerHeight, footerHeight, padding)
+
+		// Update queue overview table height
+		cols := m.state.queueOverview.table.Columns()
+		rows := m.state.queueOverview.table.Rows()
+		focused := m.state.queueOverview.table.Focused()
+
+		m.state.queueOverview.table = table.New(
+			table.WithColumns(cols),
+			table.WithRows(rows),
+			table.WithFocused(focused),
+			table.WithHeight(availableHeight),
+		)
+		m.state.queueOverview.table.SetStyles(defaultTableStyles())
+		m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+
+		// Update queue details message table height if it has been initialized
+		if len(m.state.queueDetails.messagesTable.Columns()) > 0 {
+			// For queue details, split available height (reserve some for attributes table)
+			messageTableHeight := availableHeight - 8 // Reserve ~8 lines for attributes
+			if messageTableHeight < 5 {
+				messageTableHeight = 5
+			}
+
+			msgCols := m.state.queueDetails.messagesTable.Columns()
+			msgRows := m.state.queueDetails.messagesTable.Rows()
+			msgFocused := m.state.queueDetails.messagesTable.Focused()
+
+			m.state.queueDetails.messagesTable = table.New(
+				table.WithColumns(msgCols),
+				table.WithRows(msgRows),
+				table.WithFocused(msgFocused),
+				table.WithHeight(messageTableHeight),
+			)
+			m.state.queueDetails.messagesTable.SetStyles(defaultTableStyles())
+			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
+		}
 
 	case tea.KeyMsg:
 		log.Printf("[Update] Key pressed: %s", msg.String())

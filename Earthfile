@@ -60,6 +60,11 @@ list:
     ARG AWS_ENDPOINT_URL="http://localhost:4566"
     RUN aws sqs list-queues
 
+vhs:
+    LOCALLY
+    ARG AWS_ENDPOINT_URL="http://localhost:4566"
+    RUN vhs vhs/cassette.tape
+
 all:
   BUILD +compile
   BUILD +container
