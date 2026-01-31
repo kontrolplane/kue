@@ -14,7 +14,7 @@
 
 ## views
 
-- `queue`: overview, details<sup>1</sup>, creation<sup>1</sup>, delete
+- `queue`: overview, details, creation<sup>1</sup>, delete
 - `message`: details<sup>1</sup>, creation<sup>1</sup>, delete<sup>1</sup>
 
 <sup>1</sup>: work in progress
