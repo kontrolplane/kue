@@ -23,23 +23,49 @@ Screenshot ./assets/pages/queue/overview.png
 
 Sleep 2s
 Enter
-Sleep 2s
+Sleep 3s
 Down
-Sleep 1s
+Sleep 5s
 Down
 
 Screenshot ./assets/pages/queue/details.png
 
 Type "q"
 
-Sleep 1s
-Down
-Sleep 1s
-Down
-Sleep 1s
-Down
-Sleep 1s
-Down
+Sleep 4s
+Ctrl+N
+Type "kue"
+Enter
+Sleep 3s
+
+Screenshot ./assets/pages/queue/creation-01.png
+
+Enter
+Sleep 5s
+Enter
+Sleep 3s
+
+Screenshot ./assets/pages/queue/creation-02.png
+
+Enter
+Sleep 2s
+
+Screenshot ./assets/pages/queue/creation-03.png
+
+Enter
+Sleep 2s
+Enter
+Sleep 4s
+Enter
+
+Screenshot ./assets/pages/queue/creation-04.png
+
+Sleep 3s
+Enter
+Sleep 2s
+Enter
+Enter
+
 Sleep 1s
 Down
 Sleep 1s
@@ -53,4 +79,4 @@ Sleep 2s
 Enter
 Sleep 1s
 
-Sleep 30s
+Sleep 15s

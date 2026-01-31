@@ -45,6 +45,22 @@
   <img width="2400" alt="kue queue details" src="./assets/pages/queue/details.png">
 </p>
 
+`queue creation`
+<p align="center">
+  <img width="2400" alt="kue queue creation 01" src="./assets/pages/queue/creation-01.png">
+</p>
+
+<p align="center">
+  <img width="2400" alt="kue queue creation 02" src="./assets/pages/queue/creation-02.png">
+</p>
+
+<p align="center">
+  <img width="2400" alt="kue queue creation 03" src="./assets/pages/queue/creation-03.png">
+</p>
+
+<p align="center">
+  <img width="2400" alt="kue queue creation 04" src="./assets/pages/queue/creation-04.png">
+</p>
 
 `queue delete`
 <p align="center">
