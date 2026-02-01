@@ -57,6 +57,7 @@ Sleep 2s
 Enter
 Sleep 4s
 Enter
+Sleep 2s
 
 Screenshot ./assets/pages/queue/creation-04.png
 
@@ -64,6 +65,7 @@ Sleep 3s
 Enter
 Sleep 2s
 Enter
+Sleep 2s
 Enter
 
 Sleep 1s
