@@ -2,34 +2,19 @@ package tui
 
 import (
 	"fmt"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
 	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/tui/commands"
+	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
 var queueNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
-
-func queueCreateTheme() *huh.Theme {
-	t := huh.ThemeBase()
-
-	t.Focused.Title = t.Focused.Title.Foreground(lipgloss.Color("#628049")).Bold(true)
-	t.Focused.Description = t.Focused.Description.Foreground(lipgloss.Color("243"))
-	t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(lipgloss.Color("#628049"))
-	t.Focused.FocusedButton = t.Focused.FocusedButton.Background(lipgloss.Color("#628049")).Foreground(lipgloss.Color("#ffffff"))
-	t.Focused.BlurredButton = t.Focused.BlurredButton.Background(lipgloss.Color("240")).Foreground(lipgloss.Color("255"))
-
-	t.Blurred.Title = t.Blurred.Title.Foreground(lipgloss.Color("250"))
-	t.Blurred.Description = t.Blurred.Description.Foreground(lipgloss.Color("240"))
-
-	return t
-}
 
 type queueCreateInput struct {
 	name                      string
@@ -145,7 +130,7 @@ func newQueueCreateForm(input *queueCreateInput) *huh.Form {
 				Value(&input.fifoThroughputLimit),
 		).Title("FIFO Settings (only applies to FIFO queues)"),
 	).
-		WithTheme(queueCreateTheme()).
+		WithTheme(styles.FormTheme()).
 		WithShowHelp(false).
 		WithWidth(80)
 
@@ -185,12 +170,10 @@ func validateIntRangeOrEmpty(min, max int) func(string) error {
 }
 
 func (m model) QueueCreateSwitchPage(msg tea.Msg) (model, tea.Cmd) {
-	log.Println("[QueueCreateSwitchPage]")
-
 	// Clear any previous error
 	m.error = ""
 
-	// Initialize with defaults (use pointer to avoid copy issues with value receivers)
+	// Initialize with defaults
 	m.state.queueCreate.input = &queueCreateInput{
 		queueType:           "standard",
 		deduplicationScope:  "queue",
@@ -210,11 +193,7 @@ func (m model) QueueCreateView() string {
 	formView := m.state.queueCreate.form.View()
 
 	// Center the form within the available width with top padding
-	centered := lipgloss.NewStyle().
-		Width(m.width - 4).
-		Align(lipgloss.Center).
-		PaddingTop(2).
-		Render(formView)
+	centered := styles.CenteredForm(m.width).Render(formView)
 
 	return centered
 }
@@ -240,11 +219,9 @@ func (m model) QueueCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
 
 	// Check if form is completed
 	if m.state.queueCreate.form.State == huh.StateCompleted {
-		// Create the queue
 		input := m.state.queueCreate.input
 
 		queueName := strings.TrimSpace(input.name)
-		log.Printf("[QueueCreateUpdate] Queue name: %q", queueName)
 
 		// Validate queue name before API call
 		if queueName == "" {
@@ -295,12 +272,11 @@ func (m model) QueueCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
 			config.FifoThroughputLimit = input.fifoThroughputLimit
 		}
 
-		_, err := kue.CreateQueue(m.client, m.context, config)
-		if err != nil {
-			m.error = fmt.Sprintf("Error creating queue: %v", err)
-		}
+		// Set loading state and trigger async create
+		m.loading = true
+		m.loadingMsg = "Creating queue..."
 
-		return m.QueueOverviewSwitchPage(msg)
+		return m, commands.CreateQueue(m.context, m.client, config)
 	}
 
 	// Check if form was aborted

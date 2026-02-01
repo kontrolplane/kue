@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -11,6 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/tui/commands"
+	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
 type queueDetailsState struct {
@@ -84,16 +85,8 @@ func renderAttributesTable(q kue.Queue) string {
 		table.WithHeight(len(rowsRight)+1),
 	)
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.HiddenBorder())
-
-	s.Selected = s.Selected.
-		Foreground(lipgloss.NoColor{}).
-		Bold(false)
-
-	leftTable.SetStyles(s)
-	rightTable.SetStyles(s)
+	leftTable.SetStyles(styles.AttributesTableStyles())
+	rightTable.SetStyles(styles.AttributesTableStyles())
 
 	leftView := lipgloss.NewStyle().Render(stripViewBeforeToken(leftTable.View(), rowsLeft[0][0]))
 	rightView := lipgloss.NewStyle().Render(stripViewBeforeToken(rightTable.View(), rowsRight[0][0]))
@@ -117,7 +110,6 @@ func stripViewBeforeToken(view string, token string) string {
 }
 
 func initMessageDetailsTable(height int) table.Model {
-	// Ensure minimum height
 	if height < 5 {
 		height = 5
 	}
@@ -128,58 +120,27 @@ func initMessageDetailsTable(height int) table.Model {
 		table.WithHeight(height),
 	)
 
-	t.SetStyles(defaultTableStyles())
+	t.SetStyles(styles.TableStyles())
 	return t
 }
 
 func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+	// Clear any previous error
+	m.error = ""
 
-	log.Println("[QueueDetailsSwitchPage]")
+	// Switch page and trigger async loads
+	m = m.SwitchPage(queueDetails)
+	m.loading = true
+	m.loadingMsg = "Loading queue details..."
 
-	q, err := kue.FetchQueueAttributes(m.client, m.context, m.state.queueDetails.queue.Url)
-	if err != nil {
-		m.error = fmt.Sprintf("Error fetching queue attributes: %v", err)
-	} else {
-		m.state.queueDetails.queue = q
-		m.state.queueDetails.attributesTable = renderAttributesTable(q)
-	}
+	// Reset selected message
+	m.state.queueDetails.selected = 0
 
-	messages, err := kue.FetchQueueMessages(m.client, m.context, m.state.queueDetails.queue.Url, 10)
-	if err != nil {
-		m.error = fmt.Sprintf("Error fetching queue message(s): %v", err)
-	}
-
-	m.state.queueDetails.messages = messages
-
-	var messageRows []table.Row
-	for _, message := range messages {
-		messageRows = append(messageRows, table.Row{
-			message.MessageID,
-			message.Body,
-			message.SentTimestamp,
-			fmt.Sprintf("%d", len(message.Body)),
-		})
-	}
-
-	// Calculate available height for message table
-	// If we have window dimensions, use them; otherwise use default
-	messageTableHeight := 10
-	if m.height > 0 {
-		headerHeight := 3
-		footerHeight := lipgloss.Height(m.help.View(m.keys))
-		padding := 6
-		availableHeight := m.height - headerHeight - footerHeight - padding
-		messageTableHeight = availableHeight - 8 // Reserve ~8 lines for attributes
-		if messageTableHeight < 5 {
-			messageTableHeight = 5
-		}
-	}
-
-	m.state.queueDetails.messagesTable = initMessageDetailsTable(messageTableHeight)
-	m.state.queueDetails.messagesTable.SetRows(messageRows)
-	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
-
-	return m.SwitchPage(queueDetails), nil
+	// Load queue attributes and messages in parallel
+	return m, tea.Batch(
+		commands.LoadQueueAttributes(m.context, m.client, m.state.queueDetails.queue.Url),
+		commands.LoadMessages(m.context, m.client, m.state.queueDetails.queue.Url, 10),
+	)
 }
 
 func (m model) NoMessagesFound() bool {
@@ -229,8 +190,6 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueDetailsView() string {
-	log.Println("[QueueDetailsView] queue:", m.state.queueDetails.queue.Name, m.state.queueDetails.messages)
-
 	if m.NoMessagesFound() {
 		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
 	}

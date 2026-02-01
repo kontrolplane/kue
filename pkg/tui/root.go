@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -13,40 +12,21 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	keys "github.com/kontrolplane/kue/pkg/keys"
-	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/tui/commands"
+	"github.com/kontrolplane/kue/pkg/tui/messages"
+	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
-
-var mainStyle = lipgloss.NewStyle().
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240"))
 
 func NewModel(
 	projectName string,
 	programName string,
 ) (tea.Model, error) {
 
-	var error string
-	var queues []kue.Queue
-	var messages []kue.Message
+	ctx := context.Background()
 
-	context := context.Background()
-
-	client, err := client.CreateSqsClient(context)
+	sqsClient, err := client.CreateSqsClient(ctx)
 	if err != nil {
-		error = fmt.Sprintf("[NewModel] Couldn't create SQS client: %v", err)
-	}
-
-	queues, err = kue.ListQueuesUrls(client, context)
-	if err != nil {
-		error = fmt.Sprintf("[NewModel] Error listing queues: %v", err)
-	}
-
-	for i, queue := range queues {
-		queue, err = kue.FetchQueueAttributes(client, context, queue.Url)
-		if err != nil {
-			error = fmt.Sprintf("[NewModel] Error fetching queue attributes: %v", err)
-		}
-		queues[i] = queue
+		return nil, fmt.Errorf("couldn't create SQS client: %w", err)
 	}
 
 	// Initialize with default height (will be updated by first WindowSizeMsg)
@@ -56,10 +36,10 @@ func NewModel(
 		projectName: projectName,
 		programName: programName,
 		page:        queueOverview,
-		context:     context,
-		client:      client,
-
-		error: error,
+		context:     ctx,
+		client:      sqsClient,
+		loading:     true,
+		loadingMsg:  "Loading queues...",
 
 		keys: keys.Keys,
 		help: help.New(),
@@ -68,11 +48,11 @@ func NewModel(
 			queueOverview: queueOverviewState{
 				selected: 0,
 				table:    queueOverviewTable,
-				queues:   queues,
+				queues:   nil,
 			},
 			queueDetails: queueDetailsState{
 				selected:        0,
-				messages:        messages,
+				messages:        nil,
 				attributesTable: "",
 			},
 			queueDelete: queueDeleteState{
@@ -81,54 +61,33 @@ func NewModel(
 		},
 	}
 
-	var queueOverviewRows []table.Row
-	for _, queue := range queues {
-		queueOverviewRows = append(queueOverviewRows, table.Row{
-			queue.Name,
-			queue.LastModified,
-			queue.ApproximateNumberOfMessages,
-			queue.ApproximateNumberOfMessagesNotVisible,
-			queue.ApproximateNumberOfMessagesDelayed,
-		})
-	}
-
-	m.state.queueOverview.table.SetRows(queueOverviewRows)
-	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
-
-	log.Println("[NewModel] Model initialized")
 	return m, nil
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	// Load queues on startup
+	return commands.LoadQueues(m.context, m.client)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
-		log.Printf("[Update] Window size changed to %dx%d", msg.Width, msg.Height)
 		m.width = msg.Width
 		m.height = msg.Height
-
-		// Update help width
 		m.help.Width = msg.Width
 
 		// Calculate available height for content
-		// Account for: header (3 lines), footer/help (variable), padding (6 lines)
 		headerHeight := 3
 		footerHeight := lipgloss.Height(m.help.View(m.keys))
 		padding := 6
 		availableHeight := msg.Height - headerHeight - footerHeight - padding
 
-		// Ensure minimum height
 		if availableHeight < 5 {
 			availableHeight = 5
 		}
-
-		log.Printf("[Update] Available height for tables: %d (total: %d, header: %d, footer: %d, padding: %d)",
-			availableHeight, msg.Height, headerHeight, footerHeight, padding)
 
 		// Update queue overview table height
 		cols := m.state.queueOverview.table.Columns()
@@ -141,13 +100,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			table.WithFocused(focused),
 			table.WithHeight(availableHeight),
 		)
-		m.state.queueOverview.table.SetStyles(defaultTableStyles())
+		m.state.queueOverview.table.SetStyles(styles.TableStyles())
 		m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 
 		// Update queue details message table height if it has been initialized
 		if len(m.state.queueDetails.messagesTable.Columns()) > 0 {
-			// For queue details, split available height (reserve some for attributes table)
-			messageTableHeight := availableHeight - 8 // Reserve ~8 lines for attributes
+			messageTableHeight := availableHeight - 8
 			if messageTableHeight < 5 {
 				messageTableHeight = 5
 			}
@@ -162,18 +120,95 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				table.WithFocused(msgFocused),
 				table.WithHeight(messageTableHeight),
 			)
-			m.state.queueDetails.messagesTable.SetStyles(defaultTableStyles())
+			m.state.queueDetails.messagesTable.SetStyles(styles.TableStyles())
 			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
 		}
 
 	case tea.KeyMsg:
-		log.Printf("[Update] Key pressed: %s", msg.String())
 		switch {
 		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
 		}
+
+	// Handle async message results
+	case messages.QueuesLoadedMsg:
+		m.loading = false
+		m.loadingMsg = ""
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error loading queues: %v", msg.Err)
+		} else {
+			m.error = ""
+			m.state.queueOverview.queues = msg.Queues
+			m = m.updateQueueOverviewTable()
+
+			// Schedule auto-refresh if on queue overview page
+			if m.page == queueOverview {
+				cmds = append(cmds, commands.ScheduleRefresh("queueOverview"))
+			}
+		}
+
+	case messages.QueueAttributesLoadedMsg:
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error fetching queue attributes: %v", msg.Err)
+		} else {
+			m.state.queueDetails.queue = msg.Queue
+			m.state.queueDetails.attributesTable = renderAttributesTable(msg.Queue)
+		}
+
+	case messages.MessagesLoadedMsg:
+		m.loading = false
+		m.loadingMsg = ""
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error fetching messages: %v", msg.Err)
+		} else {
+			m.state.queueDetails.messages = msg.Messages
+			m = m.updateMessagesTable()
+
+			// Schedule auto-refresh if on queue details page
+			if m.page == queueDetails {
+				cmds = append(cmds, commands.ScheduleRefresh("queueDetails"))
+			}
+		}
+
+	case messages.QueueCreatedMsg:
+		m.loading = false
+		m.loadingMsg = ""
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error creating queue: %v", msg.Err)
+		}
+		// Refresh queue list and switch to overview
+		m = m.SwitchPage(queueOverview)
+		cmds = append(cmds, commands.LoadQueues(m.context, m.client))
+
+	case messages.QueueDeletedMsg:
+		m.loading = false
+		m.loadingMsg = ""
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error deleting queue: %v", msg.Err)
+		}
+		// Reset delete selection and refresh queue list
+		m.state.queueDelete.selected = 0
+		m = m.SwitchPage(queueOverview)
+		cmds = append(cmds, commands.LoadQueues(m.context, m.client))
+
+	case messages.RefreshTickMsg:
+		// Only refresh if still on the same page that requested it
+		switch msg.Page {
+		case "queueOverview":
+			if m.page == queueOverview {
+				cmds = append(cmds, commands.LoadQueues(m.context, m.client))
+			}
+		case "queueDetails":
+			if m.page == queueDetails && m.state.queueDetails.queue.Url != "" {
+				cmds = append(cmds, tea.Batch(
+					commands.LoadQueueAttributes(m.context, m.client, m.state.queueDetails.queue.Url),
+					commands.LoadMessages(m.context, m.client, m.state.queueDetails.queue.Url, 10),
+				))
+			}
+		}
 	}
 
+	// Dispatch to page-specific Update handler
 	var cmd tea.Cmd
 	switch m.page {
 	case queueOverview:
@@ -186,39 +221,105 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.QueueDeleteUpdate(msg)
 	}
 
-	return m, cmd
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m model) View() string {
-	log.Printf("[View] Rendering view for page: %d, queue count: %d", m.page, len(m.state.queueOverview.queues))
-
 	var h string = formatHeader(m.projectName, m.programName, views[m.page])
 	var f string = m.help.View(m.keys)
 	var c string
 
-	switch m.page {
-	case queueOverview:
-		c = m.QueueOverviewView()
-	case queueDetails:
-		c = m.QueueDetailsView()
-	case queueCreate:
-		c = m.QueueCreateView()
-	case queueDelete:
-		c = m.QueueDeleteView()
-	default:
-		c = errNoPageSelected
+	if m.loading {
+		c = m.loadingMsg
+		if c == "" {
+			c = "Loading..."
+		}
+	} else {
+		switch m.page {
+		case queueOverview:
+			c = m.QueueOverviewView()
+		case queueDetails:
+			c = m.QueueDetailsView()
+		case queueCreate:
+			c = m.QueueCreateView()
+		case queueDelete:
+			c = m.QueueDeleteView()
+		default:
+			c = errNoPageSelected
+		}
 	}
 
 	if m.error != "" {
-		log.Printf("[View] Rendering error: %s", m.error)
 		c = m.ErrorView()
 	}
 
-	content := lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Align(lipgloss.Center, lipgloss.Center).
-		Render(h + "\n\n" + mainStyle.Render(c) + "\n\n" + f)
+	content := styles.ContentWrapper(m.width, m.height).
+		Render(h + "\n\n" + styles.MainBorder.Render(c) + "\n\n" + f)
 
 	return lipgloss.JoinVertical(lipgloss.Top, content)
+}
+
+// updateQueueOverviewTable updates the queue overview table with current queue data.
+func (m model) updateQueueOverviewTable() model {
+	var rows []table.Row
+	for _, queue := range m.state.queueOverview.queues {
+		rows = append(rows, table.Row{
+			queue.Name,
+			queue.LastModified,
+			queue.ApproximateNumberOfMessages,
+			queue.ApproximateNumberOfMessagesNotVisible,
+			queue.ApproximateNumberOfMessagesDelayed,
+		})
+	}
+
+	m.state.queueOverview.table.SetRows(rows)
+
+	// Ensure cursor is within bounds
+	if m.state.queueOverview.selected >= len(m.state.queueOverview.queues) {
+		m.state.queueOverview.selected = max(0, len(m.state.queueOverview.queues)-1)
+	}
+	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+
+	return m
+}
+
+// updateMessagesTable updates the messages table with current message data.
+func (m model) updateMessagesTable() model {
+	var rows []table.Row
+	for _, message := range m.state.queueDetails.messages {
+		rows = append(rows, table.Row{
+			message.MessageID,
+			message.Body,
+			message.SentTimestamp,
+			fmt.Sprintf("%d", len(message.Body)),
+		})
+	}
+
+	// Calculate available height for message table
+	messageTableHeight := 10
+	if m.height > 0 {
+		headerHeight := 3
+		footerHeight := lipgloss.Height(m.help.View(m.keys))
+		padding := 6
+		availableHeight := m.height - headerHeight - footerHeight - padding
+		messageTableHeight = availableHeight - 8
+		if messageTableHeight < 5 {
+			messageTableHeight = 5
+		}
+	}
+
+	m.state.queueDetails.messagesTable = initMessageDetailsTable(messageTableHeight)
+	m.state.queueDetails.messagesTable.SetRows(rows)
+
+	// Ensure cursor is within bounds
+	if m.state.queueDetails.selected >= len(m.state.queueDetails.messages) {
+		m.state.queueDetails.selected = max(0, len(m.state.queueDetails.messages)-1)
+	}
+	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
+
+	return m
 }

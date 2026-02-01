@@ -16,7 +16,7 @@ type model struct {
 	page        page
 	previous    page
 	state       state
-	client 		*sqs.Client
+	client      *sqs.Client
 	context     context.Context
 	width       int
 	height      int
@@ -24,6 +24,8 @@ type model struct {
 	help        help.Model
 	table       tea.Model
 	error       string
+	loading     bool
+	loadingMsg  string
 }
 
 type state struct {

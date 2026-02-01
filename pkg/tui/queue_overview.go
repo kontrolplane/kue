@@ -2,14 +2,14 @@ package tui
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
 	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/tui/commands"
+	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
 type queueOverviewState struct {
@@ -24,21 +24,6 @@ var columnMap = map[int]string{
 	2: "available",
 	3: "not visible",
 	4: "delayed",
-}
-
-// defaultTableStyles returns the standard styles used for tables in the TUI.
-func defaultTableStyles() table.Styles {
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(false)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("#ffffff")).
-		Background(lipgloss.Color("#628049")).
-		Bold(false)
-	return s
 }
 
 var queueOverviewColumns []table.Column = []table.Column{
@@ -60,36 +45,15 @@ var queueOverviewColumns []table.Column = []table.Column{
 }
 
 func (m model) QueueOverviewSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+	// Clear any previous error
+	m.error = ""
 
-	log.Println("[QueueOverviewSwitchPage]")
+	// Switch page and trigger async load
+	m = m.SwitchPage(queueOverview)
+	m.loading = true
+	m.loadingMsg = "Loading queues..."
 
-	queues, err := kue.ListQueuesUrls(m.client, m.context)
-	if err != nil {
-		m.error = fmt.Sprintf("Error queue(s): %v", err)
-	}
-
-	var queueOverviewRows []table.Row
-	for _, queue := range queues {
-
-		queue, err = kue.FetchQueueAttributes(m.client, m.context, queue.Url)
-		if err != nil {
-			m.error = fmt.Sprintf("Error fetching queue attributes: %v", err)
-			continue
-		}
-
-		queueOverviewRows = append(queueOverviewRows, table.Row{
-			queue.Name,
-			queue.LastModified,
-			queue.ApproximateNumberOfMessages,
-			queue.ApproximateNumberOfMessagesNotVisible,
-			queue.ApproximateNumberOfMessagesDelayed,
-		})
-	}
-
-	m.state.queueOverview.table.SetRows(queueOverviewRows)
-	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
-
-	return m.SwitchPage(queueOverview), nil
+	return m, commands.LoadQueues(m.context, m.client)
 }
 
 func (m model) NoQueuesFound() bool {
@@ -100,9 +64,8 @@ func (m model) QueuesCount() int {
 	return len(m.state.queueOverview.queues)
 }
 
-// Helper function to initialize the queue overview table
+// initQueueOverviewTable initializes the queue overview table.
 func initQueueOverviewTable(height int) table.Model {
-	// Ensure minimum height
 	if height < 5 {
 		height = 5
 	}
@@ -113,7 +76,7 @@ func initQueueOverviewTable(height int) table.Model {
 		table.WithHeight(height),
 	)
 
-	t.SetStyles(defaultTableStyles())
+	t.SetStyles(styles.TableStyles())
 
 	return t
 }
@@ -132,16 +95,6 @@ func (m model) previousQueue() (model, tea.Cmd) {
 	return m, nil
 }
 
-type UpdateQueuesMsg struct {
-	Queues []kue.Queue
-}
-
-func updateQueuesCmd(queues []kue.Queue) tea.Cmd {
-	return func() tea.Msg {
-		return UpdateQueuesMsg{Queues: queues}
-	}
-}
-
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -154,15 +107,19 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousQueue()
 		case key.Matches(msg, m.keys.View):
-			selected := m.state.queueOverview.selected
-			m.state.queueDetails.queue = m.state.queueOverview.queues[selected]
-			return m.QueueDetailsSwitchPage(msg)
+			if len(m.state.queueOverview.queues) > 0 {
+				selected := m.state.queueOverview.selected
+				m.state.queueDetails.queue = m.state.queueOverview.queues[selected]
+				return m.QueueDetailsSwitchPage(msg)
+			}
 		case key.Matches(msg, m.keys.Create):
 			return m.QueueCreateSwitchPage(msg)
 		case key.Matches(msg, m.keys.Delete):
-			selected := m.state.queueOverview.selected
-			m.state.queueDelete.queue = m.state.queueOverview.queues[selected]
-			return m.QueueDeleteSwitchPage(msg)
+			if len(m.state.queueOverview.queues) > 0 {
+				selected := m.state.queueOverview.selected
+				m.state.queueDelete.queue = m.state.queueOverview.queues[selected]
+				return m.QueueDeleteSwitchPage(msg)
+			}
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		default:
@@ -176,9 +133,8 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueOverviewView() string {
-
 	if m.NoQueuesFound() {
-		m.error = fmt.Sprint("No queues found")
+		return fmt.Sprint("No queues found. Press Ctrl+N to create a new queue.")
 	}
 
 	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
