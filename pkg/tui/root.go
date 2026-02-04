@@ -30,7 +30,7 @@ func NewModel(
 	}
 
 	// Initialize with default height (will be updated by first WindowSizeMsg)
-	queueOverviewTable := initQueueOverviewTable(10)
+	queueOverviewTable := initQueueOverviewTable(defaultTableHeight)
 
 	m := model{
 		projectName: projectName,
@@ -79,50 +79,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.help.Width = msg.Width
 
-		// Calculate available height for content
-		headerHeight := 3
-		footerHeight := lipgloss.Height(m.help.View(m.keys))
-		padding := 6
-		availableHeight := msg.Height - headerHeight - footerHeight - padding
-
-		if availableHeight < 5 {
-			availableHeight = 5
-		}
-
-		// Update queue overview table height
-		cols := m.state.queueOverview.table.Columns()
-		rows := m.state.queueOverview.table.Rows()
-		focused := m.state.queueOverview.table.Focused()
-
-		m.state.queueOverview.table = table.New(
-			table.WithColumns(cols),
-			table.WithRows(rows),
-			table.WithFocused(focused),
-			table.WithHeight(availableHeight),
-		)
-		m.state.queueOverview.table.SetStyles(styles.TableStyles())
-		m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
-
-		// Update queue details message table height if it has been initialized
-		if len(m.state.queueDetails.messagesTable.Columns()) > 0 {
-			messageTableHeight := availableHeight - 8
-			if messageTableHeight < 5 {
-				messageTableHeight = 5
-			}
-
-			msgCols := m.state.queueDetails.messagesTable.Columns()
-			msgRows := m.state.queueDetails.messagesTable.Rows()
-			msgFocused := m.state.queueDetails.messagesTable.Focused()
-
-			m.state.queueDetails.messagesTable = table.New(
-				table.WithColumns(msgCols),
-				table.WithRows(msgRows),
-				table.WithFocused(msgFocused),
-				table.WithHeight(messageTableHeight),
-			)
-			m.state.queueDetails.messagesTable.SetStyles(styles.TableStyles())
-			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
-		}
+		// Update all tables with consistent sizing
+		m = m.resizeTables()
 
 	case tea.KeyMsg:
 		switch {
@@ -219,6 +177,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.QueueCreateUpdate(msg)
 	case queueDelete:
 		m, cmd = m.QueueDeleteUpdate(msg)
+	case queueMessageDetails:
+		m, cmd = m.QueueMessageDetailsUpdate(msg)
 	}
 
 	if cmd != nil {
@@ -248,6 +208,8 @@ func (m model) View() string {
 			c = m.QueueCreateView()
 		case queueDelete:
 			c = m.QueueDeleteView()
+		case queueMessageDetails:
+			c = m.QueueMessageDetailsView()
 		default:
 			c = errNoPageSelected
 		}
@@ -257,10 +219,58 @@ func (m model) View() string {
 		c = m.ErrorView()
 	}
 
+	// Place content in a fixed-size container for consistent viewport
+	fixedContent := lipgloss.Place(
+		contentWidth, contentHeight,
+		lipgloss.Center, lipgloss.Top,
+		c,
+	)
+
+	// Wrap in border
+	bordered := styles.MainBorder.Render(fixedContent)
+
+	// Center everything in the terminal
 	content := styles.ContentWrapper(m.width, m.height).
-		Render(h + "\n\n" + styles.MainBorder.Render(c) + "\n\n" + f)
+		Render(h + "\n\n" + bordered + "\n\n" + f)
 
 	return lipgloss.JoinVertical(lipgloss.Top, content)
+}
+
+// resizeTables updates all table heights based on fixed content dimensions.
+func (m model) resizeTables() model {
+	tableHeight := m.getTableHeight()
+
+	// Update queue overview table
+	cols := m.state.queueOverview.table.Columns()
+	rows := m.state.queueOverview.table.Rows()
+	focused := m.state.queueOverview.table.Focused()
+
+	m.state.queueOverview.table = table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithFocused(focused),
+		table.WithHeight(tableHeight),
+	)
+	m.state.queueOverview.table.SetStyles(styles.TableStyles())
+	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+
+	// Update queue details message table if initialized
+	if len(m.state.queueDetails.messagesTable.Columns()) > 0 {
+		msgCols := m.state.queueDetails.messagesTable.Columns()
+		msgRows := m.state.queueDetails.messagesTable.Rows()
+		msgFocused := m.state.queueDetails.messagesTable.Focused()
+
+		m.state.queueDetails.messagesTable = table.New(
+			table.WithColumns(msgCols),
+			table.WithRows(msgRows),
+			table.WithFocused(msgFocused),
+			table.WithHeight(m.getMessageTableHeight()),
+		)
+		m.state.queueDetails.messagesTable.SetStyles(styles.TableStyles())
+		m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
+	}
+
+	return m
 }
 
 // updateQueueOverviewTable updates the queue overview table with current queue data.
@@ -299,20 +309,7 @@ func (m model) updateMessagesTable() model {
 		})
 	}
 
-	// Calculate available height for message table
-	messageTableHeight := 10
-	if m.height > 0 {
-		headerHeight := 3
-		footerHeight := lipgloss.Height(m.help.View(m.keys))
-		padding := 6
-		availableHeight := m.height - headerHeight - footerHeight - padding
-		messageTableHeight = availableHeight - 8
-		if messageTableHeight < 5 {
-			messageTableHeight = 5
-		}
-	}
-
-	m.state.queueDetails.messagesTable = initMessageDetailsTable(messageTableHeight)
+	m.state.queueDetails.messagesTable = initMessageDetailsTable(m.getMessageTableHeight())
 	m.state.queueDetails.messagesTable.SetRows(rows)
 
 	// Ensure cursor is within bounds

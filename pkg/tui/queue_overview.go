@@ -1,10 +1,9 @@
 package tui
 
 import (
-	"fmt"
-
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
 	kue "github.com/kontrolplane/kue/pkg/kue"
@@ -66,8 +65,8 @@ func (m model) QueuesCount() int {
 
 // initQueueOverviewTable initializes the queue overview table.
 func initQueueOverviewTable(height int) table.Model {
-	if height < 5 {
-		height = 5
+	if height < minTableHeight {
+		height = minTableHeight
 	}
 
 	t := table.New(
@@ -133,11 +132,17 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueOverviewView() string {
-	if m.NoQueuesFound() {
-		return fmt.Sprint("No queues found. Press Ctrl+N to create a new queue.")
-	}
-
 	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+
+	if m.NoQueuesFound() {
+		emptyMsg := lipgloss.NewStyle().
+			Foreground(styles.MediumGray).
+			Render("No queues found. Press Ctrl+N to create a new queue.")
+
+		return lipgloss.Place(contentWidth, contentHeight-2,
+			lipgloss.Center, lipgloss.Center,
+			emptyMsg)
+	}
 
 	return m.state.queueOverview.table.View()
 }

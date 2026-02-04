@@ -15,6 +15,7 @@ func FetchQueueMessages(client *sqs.Client, ctx context.Context, queueUrl string
 	input := &sqs.ReceiveMessageInput{
 		QueueUrl:              &queueUrl,
 		MaxNumberOfMessages:   maxMessages,
+		VisibilityTimeout:     1, // Minimal visibility timeout to keep messages visible
 		MessageAttributeNames: []string{"All"},
 		AttributeNames: []types.QueueAttributeName{
 			types.QueueAttributeNameAll,

@@ -42,7 +42,7 @@ func (m model) QueueDeleteView() string {
 		confirm,
 	)
 
-	d := lipgloss.JoinVertical(
+	dialog := lipgloss.JoinVertical(
 		lipgloss.Center,
 		"warning: queue deletion",
 		"",
@@ -51,7 +51,10 @@ func (m model) QueueDeleteView() string {
 		buttons,
 	)
 
-	return styles.DialogContainer.Render(d)
+	// Center dialog in the fixed content area
+	return lipgloss.Place(contentWidth, contentHeight-2,
+		lipgloss.Center, lipgloss.Center,
+		dialog)
 }
 
 func (m model) switchOption() (model, tea.Cmd) {

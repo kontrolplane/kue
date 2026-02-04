@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -164,8 +165,8 @@ func TestQueueOverviewViewWithoutQueues(t *testing.T) {
 
 	view := m.QueueOverviewView()
 
-	expected := "No queues found. Press Ctrl+N to create a new queue."
-	if view != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, view)
+	// View should contain the empty message centered in the table area
+	if !strings.Contains(view, "No queues found. Press Ctrl+N to create a new queue.") {
+		t.Errorf("Expected view to contain empty queue message, got '%s'", view)
 	}
 }

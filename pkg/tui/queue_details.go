@@ -110,8 +110,8 @@ func stripViewBeforeToken(view string, token string) string {
 }
 
 func initMessageDetailsTable(height int) table.Model {
-	if height < 5 {
-		height = 5
+	if height < minTableHeight {
+		height = minTableHeight
 	}
 
 	t := table.New(
@@ -177,6 +177,14 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
+		case key.Matches(msg, m.keys.View):
+			// Navigate to message details if messages exist
+			if len(m.state.queueDetails.messages) > 0 {
+				selected := m.state.queueDetails.selected
+				m.state.queueMessageDetails.message = m.state.queueDetails.messages[selected]
+				m.state.queueMessageDetails.queueName = m.state.queueDetails.queue.Name
+				return m.QueueMessageDetailsSwitchPage(msg)
+			}
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueOverviewSwitchPage(msg)
 		default:
@@ -190,12 +198,20 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueDetailsView() string {
+	attributesTableView := m.state.queueDetails.attributesTable
+
 	if m.NoMessagesFound() {
-		return fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name)
+		emptyMsg := lipgloss.NewStyle().
+			Foreground(styles.MediumGray).
+			Render(fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name))
+
+		msgTableHeight := m.getMessageTableHeight()
+		centeredMsg := lipgloss.Place(contentWidth, msgTableHeight,
+			lipgloss.Center, lipgloss.Center,
+			emptyMsg)
+
+		return attributesTableView + "\n\n" + centeredMsg
 	}
 
-	attributesTableView := m.state.queueDetails.attributesTable
-	messagesTableView := m.state.queueDetails.messagesTable.View()
-
-	return attributesTableView + "\n\n\n" + messagesTableView
+	return attributesTableView + "\n\n" + m.state.queueDetails.messagesTable.View()
 }

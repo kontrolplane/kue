@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
 	kue "github.com/kontrolplane/kue/pkg/kue"
@@ -192,10 +193,10 @@ func (m model) QueueCreateView() string {
 
 	formView := m.state.queueCreate.form.View()
 
-	// Center the form within the available width with top padding
-	centered := styles.CenteredForm(m.width).Render(formView)
-
-	return centered
+	// Center the form in the fixed content area
+	return lipgloss.Place(contentWidth, contentHeight-2,
+		lipgloss.Center, lipgloss.Center,
+		formView)
 }
 
 func (m model) QueueCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
