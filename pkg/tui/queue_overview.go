@@ -23,7 +23,7 @@ var columnMap = map[int]string{
 	2: "available",
 	3: "not visible",
 	4: "delayed",
-	5: "dlq",
+	5: "has dlq",
 	6: "visibility",
 	7: "retention",
 }

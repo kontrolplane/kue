@@ -2,6 +2,7 @@ package kue
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -59,6 +60,22 @@ func FetchQueueAttributes(client *sqs.Client, ctx context.Context, queueUrl stri
 		if val, ok := attrsResult.Attributes[string(attrName)]; ok {
 			*field = val
 		}
+	}
+
+	// Parse RedrivePolicy to extract DeadLetterTargetARN
+	if val, ok := attrsResult.Attributes[string(types.QueueAttributeNameRedrivePolicy)]; ok {
+		queue.RedrivePolicy = val
+		var redrivePolicy struct {
+			DeadLetterTargetARN string `json:"deadLetterTargetArn"`
+		}
+		if err := json.Unmarshal([]byte(val), &redrivePolicy); err == nil {
+			queue.DeadLetterTargetARN = redrivePolicy.DeadLetterTargetARN
+		}
+	}
+
+	// Check for FIFO queue
+	if val, ok := attrsResult.Attributes[string(types.QueueAttributeNameFifoQueue)]; ok {
+		queue.FifoQueue = val
 	}
 
 	if tagsResult, err := client.ListQueueTags(ctx, &sqs.ListQueueTagsInput{QueueUrl: &queueUrl}); err == nil && len(tagsResult.Tags) > 0 {
