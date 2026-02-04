@@ -193,8 +193,8 @@ func (m model) QueueCreateView() string {
 
 	formView := m.state.queueCreate.form.View()
 
-	// Center the form in the fixed content area
-	return lipgloss.Place(contentWidth, contentHeight-2,
+	// Center the form both horizontally and vertically
+	return lipgloss.Place(contentWidth, contentHeight,
 		lipgloss.Center, lipgloss.Center,
 		formView)
 }

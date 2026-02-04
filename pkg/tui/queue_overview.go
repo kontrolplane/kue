@@ -19,18 +19,21 @@ type queueOverviewState struct {
 
 var columnMap = map[int]string{
 	0: "queue name",
-	1: "last modified",
+	1: "type",
 	2: "available",
 	3: "not visible",
 	4: "delayed",
+	5: "dlq",
+	6: "visibility",
+	7: "retention",
 }
 
 var queueOverviewColumns []table.Column = []table.Column{
 	{
-		Title: columnMap[0], Width: 40,
+		Title: columnMap[0], Width: 45,
 	},
 	{
-		Title: columnMap[1], Width: 20,
+		Title: columnMap[1], Width: 10,
 	},
 	{
 		Title: columnMap[2], Width: 10,
@@ -40,6 +43,15 @@ var queueOverviewColumns []table.Column = []table.Column{
 	},
 	{
 		Title: columnMap[4], Width: 10,
+	},
+	{
+		Title: columnMap[5], Width: 10,
+	},
+	{
+		Title: columnMap[6], Width: 10,
+	},
+	{
+		Title: columnMap[7], Width: 10,
 	},
 }
 
@@ -133,16 +145,15 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 
 func (m model) QueueOverviewView() string {
 	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+	tableView := m.state.queueOverview.table.View()
 
 	if m.NoQueuesFound() {
 		emptyMsg := lipgloss.NewStyle().
 			Foreground(styles.MediumGray).
 			Render("No queues found. Press Ctrl+N to create a new queue.")
 
-		return lipgloss.Place(contentWidth, contentHeight-2,
-			lipgloss.Center, lipgloss.Center,
-			emptyMsg)
+		return tableView + "\n\n" + emptyMsg
 	}
 
-	return m.state.queueOverview.table.View()
+	return tableView
 }

@@ -30,10 +30,20 @@ Down
 
 Screenshot ./assets/pages/queue/details.png
 
+Sleep 5s
+Enter
+
+Screenshot ./assets/pages/message/details.png
+
+Type "q"
+
+Sleep 3s
+
 Type "q"
 
 Sleep 4s
 Ctrl+N
+Sleep 4s
 Type "kue"
 Enter
 Sleep 3s

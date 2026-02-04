@@ -24,7 +24,7 @@ func NewModel(
 
 	ctx := context.Background()
 
-	sqsClient, err := client.CreateSqsClient(ctx)
+	sqsClient, awsInfo, err := client.CreateSqsClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create SQS client: %w", err)
 	}
@@ -38,6 +38,7 @@ func NewModel(
 		page:        queueOverview,
 		context:     ctx,
 		client:      sqsClient,
+		awsInfo:     awsInfo,
 		loading:     true,
 		loadingMsg:  "Loading queues...",
 
@@ -189,7 +190,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	var h string = formatHeader(m.projectName, m.programName, views[m.page])
+	var h string = formatHeader(m.projectName, m.programName, views[m.page], m.awsInfo)
 	var f string = m.help.View(m.keys)
 	var c string
 
@@ -277,12 +278,34 @@ func (m model) resizeTables() model {
 func (m model) updateQueueOverviewTable() model {
 	var rows []table.Row
 	for _, queue := range m.state.queueOverview.queues {
+
+		// Format queue type
+		queueType := "standard"
+		if queue.FifoQueue == "true" {
+			queueType = "fifo"
+		}
+
+		// Format DLQ as Yes/No
+		dlq := "no"
+		if queue.DeadLetterTargetARN != "" {
+			dlq = "yes"
+		}
+
+		// Format visibility timeout (seconds)
+		visibility := queue.VisibilityTimeout + "s"
+
+		// Format retention period (convert seconds to days if possible)
+		retention := formatRetention(queue.MessageRetentionPeriod)
+
 		rows = append(rows, table.Row{
 			queue.Name,
-			queue.LastModified,
-			queue.ApproximateNumberOfMessages,
-			queue.ApproximateNumberOfMessagesNotVisible,
-			queue.ApproximateNumberOfMessagesDelayed,
+			queueType,
+			centerText(queue.ApproximateNumberOfMessages, 10),
+			centerText(queue.ApproximateNumberOfMessagesNotVisible, 15),
+			centerText(queue.ApproximateNumberOfMessagesDelayed, 10),
+			centerText(dlq, 10),
+			centerText(visibility, 10),
+			centerText(retention, 10),
 		})
 	}
 
@@ -319,4 +342,33 @@ func (m model) updateMessagesTable() model {
 	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
 
 	return m
+}
+
+// formatRetention converts retention period from seconds to a human-readable format.
+func formatRetention(seconds string) string {
+	if seconds == "" {
+		return "-"
+	}
+
+	var secs int
+	if _, err := fmt.Sscanf(seconds, "%d", &secs); err != nil {
+		return seconds
+	}
+
+	days := secs / 86400
+	if days > 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+
+	hours := secs / 3600
+	if hours > 0 {
+		return fmt.Sprintf("%dh", hours)
+	}
+
+	return fmt.Sprintf("%ds", secs)
+}
+
+// centerText centers text within a given width using lipgloss.
+func centerText(text string, width int) string {
+	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(text)
 }

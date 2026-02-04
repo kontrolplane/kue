@@ -76,144 +76,112 @@ func (m model) QueueMessageDetailsView() string {
 func (m model) renderMessageDetails() string {
 	msg := m.state.queueMessageDetails.message
 
-	// Styles for the details view
+	// Define consistent widths
+	const (
+		labelWidth   = 22
+		valueWidth   = 45
+		sectionWidth = labelWidth + valueWidth + 3
+	)
+
+	// Reusable styles
 	labelStyle := lipgloss.NewStyle().
-		Foreground(styles.AccentColor).
-		Bold(true).
-		Width(25)
+		Foreground(styles.MediumGray).
+		Width(labelWidth).
+		Align(lipgloss.Right).
+		PaddingRight(2)
 
 	valueStyle := lipgloss.NewStyle().
-		Foreground(styles.TextLight)
+		Foreground(styles.TextLight).
+		Width(valueWidth)
 
-	sectionStyle := lipgloss.NewStyle().
+	sectionHeader := lipgloss.NewStyle().
+		Foreground(styles.TextLight).
 		Bold(true).
-		Foreground(styles.TextWhite).
-		Background(styles.AccentColor).
-		Padding(0, 1).
-		MarginTop(1).
-		MarginBottom(1)
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(styles.BorderColor).
+		Width(sectionWidth).
+		MarginTop(1)
 
-	bodyStyle := lipgloss.NewStyle().
+	rowStyle := lipgloss.NewStyle().PaddingLeft(2)
+
+	bodyBoxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.BorderColor).
 		Padding(1, 2).
-		Width(80)
+		Width(sectionWidth).
+		MarginTop(1)
 
-	// Build the details view
-	var sections []string
-
-	// Header with queue name
-	header := fmt.Sprintf("Message from queue: %s", m.state.queueMessageDetails.queueName)
-	sections = append(sections, lipgloss.NewStyle().Bold(true).Render(header))
-	sections = append(sections, "")
-
-	// Basic Information Section
-	sections = append(sections, sectionStyle.Render("Basic Information"))
-
-	sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-		labelStyle.Render("Message ID:"),
-		valueStyle.Render(msg.MessageID),
-	))
-
-	sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-		labelStyle.Render("Sent Timestamp:"),
-		valueStyle.Render(msg.SentTimestamp),
-	))
-
-	if msg.FirstReceiveTime != "" {
-		sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-			labelStyle.Render("First Receive Time:"),
-			valueStyle.Render(msg.FirstReceiveTime),
-		))
+	// Helper to create a row
+	row := func(label, value string) string {
+		return rowStyle.Render(
+			lipgloss.JoinHorizontal(lipgloss.Top,
+				labelStyle.Render(label),
+				valueStyle.Render(value),
+			),
+		)
 	}
 
-	sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-		labelStyle.Render("Receive Count:"),
-		valueStyle.Render(msg.ReceiveCount),
-	))
+	var sections []string
 
-	sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-		labelStyle.Render("Body Size:"),
-		valueStyle.Render(fmt.Sprintf("%d bytes", len(msg.Body))),
-	))
-
-	sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-		labelStyle.Render("MD5 of Body:"),
-		valueStyle.Render(msg.MD5OfBody),
-	))
+	// Basic Information
+	sections = append(sections, sectionHeader.Render("Basic Information"))
+	sections = append(sections, row("Message ID", msg.MessageID))
+	sections = append(sections, row("Sent", msg.SentTimestamp))
+	if msg.FirstReceiveTime != "" {
+		sections = append(sections, row("First Received", msg.FirstReceiveTime))
+	}
+	sections = append(sections, row("Receive Count", msg.ReceiveCount))
+	sections = append(sections, row("Body Size", fmt.Sprintf("%d bytes", len(msg.Body))))
+	sections = append(sections, row("MD5", msg.MD5OfBody))
 
 	// FIFO Queue Attributes (if present)
 	if msg.MessageGroupID != "" || msg.MessageDeduplicationID != "" || msg.SequenceNumber != "" {
-		sections = append(sections, "")
-		sections = append(sections, sectionStyle.Render("FIFO Queue Attributes"))
-
+		sections = append(sections, sectionHeader.Render("FIFO Attributes"))
 		if msg.MessageGroupID != "" {
-			sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-				labelStyle.Render("Message Group ID:"),
-				valueStyle.Render(msg.MessageGroupID),
-			))
+			sections = append(sections, row("Group ID", msg.MessageGroupID))
 		}
-
 		if msg.MessageDeduplicationID != "" {
-			sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-				labelStyle.Render("Deduplication ID:"),
-				valueStyle.Render(msg.MessageDeduplicationID),
-			))
+			sections = append(sections, row("Deduplication ID", msg.MessageDeduplicationID))
 		}
-
 		if msg.SequenceNumber != "" {
-			sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-				labelStyle.Render("Sequence Number:"),
-				valueStyle.Render(msg.SequenceNumber),
-			))
+			sections = append(sections, row("Sequence Number", msg.SequenceNumber))
 		}
 	}
 
-	// Message Attributes (custom attributes)
+	// Message Attributes (custom)
 	if len(msg.MessageAttributes) > 0 {
-		sections = append(sections, "")
-		sections = append(sections, sectionStyle.Render("Message Attributes"))
-
-		for attrName, attrValue := range msg.MessageAttributes {
-			sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-				labelStyle.Render(attrName+":"),
-				valueStyle.Render(attrValue),
-			))
+		sections = append(sections, sectionHeader.Render("Custom Attributes"))
+		for name, value := range msg.MessageAttributes {
+			sections = append(sections, row(name, value))
 		}
 	}
 
-	// System Attributes
-	if len(msg.Attributes) > 0 {
-		sections = append(sections, "")
-		sections = append(sections, sectionStyle.Render("System Attributes"))
-
-		for attrName, attrValue := range msg.Attributes {
-			// Skip attributes we've already shown
-			if attrName == "SentTimestamp" || attrName == "ApproximateFirstReceiveTimestamp" ||
-				attrName == "ApproximateReceiveCount" || attrName == "MessageGroupId" ||
-				attrName == "MessageDeduplicationId" || attrName == "SequenceNumber" {
-				continue
-			}
-			sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Top,
-				labelStyle.Render(attrName+":"),
-				valueStyle.Render(attrValue),
-			))
+	// System Attributes (excluding already shown)
+	var sysAttrs []string
+	skip := map[string]bool{
+		"SentTimestamp": true, "ApproximateFirstReceiveTimestamp": true,
+		"ApproximateReceiveCount": true, "MessageGroupId": true,
+		"MessageDeduplicationId": true, "SequenceNumber": true,
+	}
+	for name, value := range msg.Attributes {
+		if !skip[name] {
+			sysAttrs = append(sysAttrs, row(name, value))
 		}
 	}
+	if len(sysAttrs) > 0 {
+		sections = append(sections, sectionHeader.Render("System Attributes"))
+		sections = append(sections, sysAttrs...)
+	}
 
-	// Message Body Section
-	sections = append(sections, "")
-	sections = append(sections, sectionStyle.Render("Message Body"))
-
-	// Truncate body if too long for display
+	// Message Body
+	sections = append(sections, sectionHeader.Render("Body"))
 	body := msg.Body
 	if len(body) > 2000 {
-		body = body[:2000] + "\n... (truncated, showing first 2000 characters)"
+		body = body[:2000] + "\n... (truncated)"
 	}
+	sections = append(sections, bodyBoxStyle.Render(body))
 
-	sections = append(sections, bodyStyle.Render(body))
-
-	// Join content left-aligned, then center the whole block
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	return lipgloss.PlaceHorizontal(contentWidth, lipgloss.Center, content)
 }

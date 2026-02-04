@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kontrolplane/kue/pkg/client"
 	keys "github.com/kontrolplane/kue/pkg/keys"
 )
 
@@ -29,6 +30,7 @@ type model struct {
 	previous    page
 	state       state
 	client      *sqs.Client
+	awsInfo     client.AWSInfo
 	context     context.Context
 	width       int
 	height      int

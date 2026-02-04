@@ -15,7 +15,7 @@
 ## views
 
 - `queue`: overview, details, creation, delete
-- `message`: details<sup>1</sup>, creation<sup>1</sup>, delete<sup>1</sup>
+- `message`: details, creation<sup>1</sup>, delete<sup>1</sup>
 
 <sup>1</sup>: work in progress
 
@@ -43,6 +43,11 @@
 `queue details`
 <p align="center">
   <img width="2400" alt="kue queue details" src="./assets/pages/queue/details.png">
+</p>
+
+`message details`
+<p align="center">
+  <img width="2400" alt="kue message details" src="./assets/pages/message/details.png">
 </p>
 
 `queue creation`

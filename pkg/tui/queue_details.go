@@ -199,19 +199,15 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 
 func (m model) QueueDetailsView() string {
 	attributesTableView := m.state.queueDetails.attributesTable
+	messagesTableView := m.state.queueDetails.messagesTable.View()
 
 	if m.NoMessagesFound() {
 		emptyMsg := lipgloss.NewStyle().
 			Foreground(styles.MediumGray).
 			Render(fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name))
 
-		msgTableHeight := m.getMessageTableHeight()
-		centeredMsg := lipgloss.Place(contentWidth, msgTableHeight,
-			lipgloss.Center, lipgloss.Center,
-			emptyMsg)
-
-		return attributesTableView + "\n\n" + centeredMsg
+		return attributesTableView + "\n\n" + messagesTableView + "\n\n" + emptyMsg
 	}
 
-	return attributesTableView + "\n\n" + m.state.queueDetails.messagesTable.View()
+	return attributesTableView + "\n\n" + messagesTableView
 }
