@@ -13,6 +13,7 @@ import (
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
+// queueMessageCreateState holds the state for message creation.
 type queueMessageCreateState struct {
 	queueName string
 	queueUrl  string
@@ -21,24 +22,20 @@ type queueMessageCreateState struct {
 	selected  int // 0 = textarea, 1 = cancel, 2 = submit
 }
 
-// Textarea dimensions to match section width (labelWidth + valueWidth + 3 = 75)
-// Subtract border (2) and padding (2) = 71
-const messageTextareaWidth = 71
+const messageTextareaWidth = 71 // Matches section width minus borders
 
 func (m model) QueueMessageCreateSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	m.error = ""
 
-	// Initialize textarea
 	ta := textarea.New()
 	ta.Placeholder = "Enter message body (JSON or plain text)..."
 	ta.Focus()
 	ta.SetWidth(messageTextareaWidth)
 	ta.SetHeight(8)
-	ta.CharLimit = 262144 // SQS max message size
+	ta.CharLimit = 262144
 
 	m.state.queueMessageCreate.textarea = ta
 	m.state.queueMessageCreate.selected = 0
-
 	return m.SwitchPage(queueMessageCreate), nil
 }
 
@@ -80,8 +77,6 @@ func (m model) QueueMessageCreateView() string {
 	}
 
 	var sections []string
-
-	// Queue Information
 	sections = append(sections, sectionHeader.Render("Queue Information"))
 	sections = append(sections, row("Queue Name", m.state.queueMessageCreate.queueName))
 
@@ -90,8 +85,6 @@ func (m model) QueueMessageCreateView() string {
 		queueType = "FIFO"
 	}
 	sections = append(sections, row("Queue Type", queueType))
-
-	// Message Body
 	sections = append(sections, sectionHeader.Render("Message Body"))
 
 	textareaStyle := lipgloss.NewStyle().
@@ -106,7 +99,6 @@ func (m model) QueueMessageCreateView() string {
 
 	sections = append(sections, textareaStyle.Render(m.state.queueMessageCreate.textarea.View()))
 
-	// Buttons
 	cancelBtn := "cancel"
 	submitBtn := "submit"
 
@@ -142,7 +134,6 @@ func (m model) QueueMessageCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
 			return m.QueueDetailsGoBack(msg)
 
 		case msg.Type == tea.KeyTab || msg.Type == tea.KeyShiftTab:
-			// Cycle through: textarea (0) -> cancel (1) -> submit (2) -> textarea (0)
 			if msg.Type == tea.KeyShiftTab {
 				m.state.queueMessageCreate.selected--
 				if m.state.queueMessageCreate.selected < 0 {
@@ -152,7 +143,6 @@ func (m model) QueueMessageCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
 				m.state.queueMessageCreate.selected = (m.state.queueMessageCreate.selected + 1) % 3
 			}
 
-			// Focus/blur textarea based on selection
 			if m.state.queueMessageCreate.selected == 0 {
 				m.state.queueMessageCreate.textarea.Focus()
 			} else {
@@ -161,11 +151,10 @@ func (m model) QueueMessageCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, m.keys.View):
-			// Enter key
 			switch m.state.queueMessageCreate.selected {
-			case 1: // Cancel
+			case 1:
 				return m.QueueDetailsGoBack(msg)
-			case 2: // Submit
+			case 2:
 				body := strings.TrimSpace(m.state.queueMessageCreate.textarea.Value())
 				if body == "" {
 					m.error = "Message body cannot be empty"
@@ -179,24 +168,19 @@ func (m model) QueueMessageCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
 					QueueUrl:    m.state.queueMessageCreate.queueUrl,
 					MessageBody: body,
 				}
-
-				// For FIFO queues, add a message group ID
 				if m.state.queueMessageCreate.isFifo {
 					input.MessageGroupId = "default"
 				}
-
 				return m, commands.SendMessage(m.context, m.client, input)
 			}
 		}
 
-		// Pass key to textarea if it's focused
 		if m.state.queueMessageCreate.selected == 0 {
 			m.state.queueMessageCreate.textarea, cmd = m.state.queueMessageCreate.textarea.Update(msg)
 			return m, cmd
 		}
 	}
 
-	// Always update textarea for cursor blink etc.
 	if m.state.queueMessageCreate.selected == 0 {
 		m.state.queueMessageCreate.textarea, cmd = m.state.queueMessageCreate.textarea.Update(msg)
 	}

@@ -11,12 +11,14 @@ import (
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
+// queueOverviewState holds the state for the queue listing view.
 type queueOverviewState struct {
 	selected int
 	queues   []kue.Queue
 	table    table.Model
 }
 
+// Queue table column definitions.
 var columnMap = map[int]string{
 	0: "queue name",
 	1: "type",
@@ -56,14 +58,10 @@ var queueOverviewColumns []table.Column = []table.Column{
 }
 
 func (m model) QueueOverviewSwitchPage(msg tea.Msg) (model, tea.Cmd) {
-	// Clear any previous error
 	m.error = ""
-
-	// Switch page and trigger async load
 	m = m.SwitchPage(queueOverview)
 	m.loading = true
 	m.loadingMsg = "Loading queues..."
-
 	return m, commands.LoadQueues(m.context, m.client)
 }
 
@@ -75,7 +73,6 @@ func (m model) QueuesCount() int {
 	return len(m.state.queueOverview.queues)
 }
 
-// initQueueOverviewTable initializes the queue overview table.
 func initQueueOverviewTable(height int) table.Model {
 	if height < minTableHeight {
 		height = minTableHeight

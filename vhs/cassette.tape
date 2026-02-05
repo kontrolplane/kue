@@ -74,10 +74,12 @@ Sleep 4s
 Type "kontrolplane-demonstration"
 Enter
 Sleep 3s
+Down
+Sleep 3s
 
 Screenshot ./assets/pages/queue/creation-01.png
 
-Sleep 2s
+Sleep 5s
 Enter
 Sleep 5s
 Enter
@@ -85,6 +87,8 @@ Sleep 3s
 
 Screenshot ./assets/pages/queue/creation-02.png
 
+Sleep 3s
+Enter
 Sleep 2s
 Enter
 Sleep 2s

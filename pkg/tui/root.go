@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
@@ -29,7 +28,6 @@ func NewModel(
 		return nil, fmt.Errorf("couldn't create SQS client: %w", err)
 	}
 
-	// Initialize with default height (will be updated by first WindowSizeMsg)
 	queueOverviewTable := initQueueOverviewTable(defaultTableHeight)
 
 	m := model{
@@ -43,7 +41,6 @@ func NewModel(
 		loadingMsg:  "Loading queues...",
 
 		keys: keys.Keys,
-		help: help.New(),
 
 		state: state{
 			queueOverview: queueOverviewState{
@@ -66,7 +63,6 @@ func NewModel(
 }
 
 func (m model) Init() tea.Cmd {
-	// Load queues on startup
 	return commands.LoadQueues(m.context, m.client)
 }
 
@@ -78,18 +74,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.help.Width = msg.Width
-
-		// Update all tables with consistent sizing
 		m = m.resizeTables()
 
 	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.keys.Help):
-			m.help.ShowAll = !m.help.ShowAll
+		if key.Matches(msg, m.keys.Help) {
+			m.showHelp = !m.showHelp
+			return m, nil
+		}
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
 		}
 
-	// Handle async message results
 	case messages.QueuesLoadedMsg:
 		m.loading = false
 		m.loadingMsg = ""
@@ -99,8 +95,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.error = ""
 			m.state.queueOverview.queues = msg.Queues
 			m = m.updateQueueOverviewTable()
-
-			// Schedule auto-refresh if on queue overview page
 			if m.page == queueOverview {
 				cmds = append(cmds, commands.ScheduleRefresh("queueOverview"))
 			}
@@ -122,8 +116,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.state.queueDetails.messages = msg.Messages
 			m = m.updateMessagesTable()
-
-			// Schedule auto-refresh if on queue details page
 			if m.page == queueDetails {
 				cmds = append(cmds, commands.ScheduleRefresh("queueDetails"))
 			}
@@ -135,7 +127,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.error = fmt.Sprintf("Error creating queue: %v", msg.Err)
 		}
-		// Refresh queue list and switch to overview
 		m = m.SwitchPage(queueOverview)
 		cmds = append(cmds, commands.LoadQueues(m.context, m.client))
 
@@ -145,7 +136,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.error = fmt.Sprintf("Error deleting queue: %v", msg.Err)
 		}
-		// Reset delete selection and refresh queue list
 		m.state.queueDelete.selected = 0
 		m = m.SwitchPage(queueOverview)
 		cmds = append(cmds, commands.LoadQueues(m.context, m.client))
@@ -156,12 +146,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.error = fmt.Sprintf("Error deleting message: %v", msg.Err)
 		} else {
-			// Refresh messages - stay on current page if queue details, otherwise go to queue details
 			queueUrl := m.state.queueDetails.queue.Url
 			if m.page != queueDetails {
 				m = m.SwitchPage(queueDetails)
 			}
-			// Adjust selection if needed
 			if m.state.queueDetails.selected >= len(m.state.queueDetails.messages)-1 && m.state.queueDetails.selected > 0 {
 				m.state.queueDetails.selected--
 			}
@@ -177,7 +165,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.error = fmt.Sprintf("Error sending message: %v", msg.Err)
 		} else {
-			// Go back to queue details and refresh messages
 			queueUrl := m.state.queueMessageCreate.queueUrl
 			m = m.SwitchPage(queueDetails)
 			cmds = append(cmds, tea.Batch(
@@ -187,7 +174,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case messages.RefreshTickMsg:
-		// Only refresh if still on the same page that requested it
 		switch msg.Page {
 		case "queueOverview":
 			if m.page == queueOverview {
@@ -203,7 +189,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Dispatch to page-specific Update handler
 	var cmd tea.Cmd
 	switch m.page {
 	case queueOverview:
@@ -230,8 +215,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	var h string = formatHeader(m.projectName, m.programName, views[m.page], m.awsInfo)
-	var f string = m.help.View(m.keys)
+	h := formatHeader(m.projectName, m.programName, views[m.page], m.awsInfo)
+	f := m.renderShortHelp()
 	var c string
 
 	if m.loading {
@@ -264,28 +249,90 @@ func (m model) View() string {
 		c = m.ErrorView()
 	}
 
-	// Place content in a fixed-size container for consistent viewport
-	fixedContent := lipgloss.Place(
-		contentWidth, contentHeight,
-		lipgloss.Center, lipgloss.Top,
-		c,
-	)
-
-	// Wrap in border
+	fixedContent := lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Top, c)
 	bordered := styles.MainBorder.Render(fixedContent)
+	mainView := h + "\n\n" + bordered + "\n\n" + f
 
-	// Center everything in the terminal
-	content := styles.ContentWrapper(m.width, m.height).
-		Render(h + "\n\n" + bordered + "\n\n" + f)
+	if m.showHelp {
+		mainView = m.renderHelpOverlay(mainView)
+	}
 
-	return lipgloss.JoinVertical(lipgloss.Top, content)
+	return styles.ContentWrapper(m.width, m.height).Render(mainView)
 }
 
-// resizeTables updates all table heights based on fixed content dimensions.
+func (m model) renderShortHelp() string {
+	helpStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
+	return helpStyle.Render("? help • q quit")
+}
+
+func (m model) renderHelpOverlay(background string) string {
+	helpContent := m.renderHelpContent()
+
+	overlay := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.AccentColor).
+		Padding(1, 3).
+		Background(lipgloss.Color("235")).
+		Render(helpContent)
+
+	return lipgloss.Place(contentWidth+4, contentHeight+10,
+		lipgloss.Center, lipgloss.Center,
+		overlay,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceForeground(lipgloss.Color("235")),
+	)
+}
+
+func (m model) renderHelpContent() string {
+	titleStyle := lipgloss.NewStyle().
+		Foreground(styles.AccentColor).
+		Bold(true).
+		MarginBottom(1)
+
+	keyStyle := lipgloss.NewStyle().
+		Foreground(styles.TextLight).
+		Width(15)
+
+	descStyle := lipgloss.NewStyle().
+		Foreground(styles.MediumGray)
+
+	row := func(key, desc string) string {
+		return keyStyle.Render(key) + descStyle.Render(desc)
+	}
+
+	navigation := lipgloss.JoinVertical(lipgloss.Left,
+		titleStyle.Render("Navigation"),
+		row("↑/k", "move up"),
+		row("↓/j", "move down"),
+		row("←/h", "move left"),
+		row("→/l", "move right"),
+		row("enter", "view/select"),
+	)
+
+	actions := lipgloss.JoinVertical(lipgloss.Left,
+		titleStyle.Render("Actions"),
+		row("ctrl+n", "create new"),
+		row("ctrl+d", "delete"),
+		row("/", "filter"),
+		row("q/esc", "back/quit"),
+		row("?", "toggle help"),
+	)
+
+	columns := lipgloss.JoinHorizontal(lipgloss.Top,
+		lipgloss.NewStyle().MarginRight(4).Render(navigation),
+		actions,
+	)
+
+	footer := lipgloss.NewStyle().
+		Foreground(styles.DarkGray).
+		MarginTop(1).
+		Render("Press any key to close")
+
+	return lipgloss.JoinVertical(lipgloss.Center, columns, footer)
+}
+
 func (m model) resizeTables() model {
 	tableHeight := m.getTableHeight()
-
-	// Update queue overview table
 	cols := m.state.queueOverview.table.Columns()
 	rows := m.state.queueOverview.table.Rows()
 	focused := m.state.queueOverview.table.Focused()
@@ -299,7 +346,6 @@ func (m model) resizeTables() model {
 	m.state.queueOverview.table.SetStyles(styles.TableStyles())
 	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
 
-	// Update queue details message table if initialized
 	if len(m.state.queueDetails.messagesTable.Columns()) > 0 {
 		msgCols := m.state.queueDetails.messagesTable.Columns()
 		msgRows := m.state.queueDetails.messagesTable.Rows()
@@ -318,21 +364,14 @@ func (m model) resizeTables() model {
 	return m
 }
 
-// updateQueueOverviewTable updates the queue overview table with current queue data.
 func (m model) updateQueueOverviewTable() model {
 	var rows []table.Row
 	for _, queue := range m.state.queueOverview.queues {
-
-		// Format queue type
 		queueType := "standard"
 		if queue.FifoQueue == "true" {
 			queueType = "fifo"
 		}
-
-		// Format visibility timeout (seconds)
 		visibility := queue.VisibilityTimeout + "s"
-
-		// Format retention period (convert seconds to days if possible)
 		retention := formatRetention(queue.MessageRetentionPeriod)
 
 		rows = append(rows, table.Row{
@@ -348,8 +387,6 @@ func (m model) updateQueueOverviewTable() model {
 	}
 
 	m.state.queueOverview.table.SetRows(rows)
-
-	// Ensure cursor is within bounds
 	if m.state.queueOverview.selected >= len(m.state.queueOverview.queues) {
 		m.state.queueOverview.selected = max(0, len(m.state.queueOverview.queues)-1)
 	}
@@ -358,7 +395,6 @@ func (m model) updateQueueOverviewTable() model {
 	return m
 }
 
-// updateMessagesTable updates the messages table with current message data.
 func (m model) updateMessagesTable() model {
 	var rows []table.Row
 	for _, message := range m.state.queueDetails.messages {
@@ -372,8 +408,6 @@ func (m model) updateMessagesTable() model {
 
 	m.state.queueDetails.messagesTable = initMessageDetailsTable(m.getMessageTableHeight())
 	m.state.queueDetails.messagesTable.SetRows(rows)
-
-	// Ensure cursor is within bounds
 	if m.state.queueDetails.selected >= len(m.state.queueDetails.messages) {
 		m.state.queueDetails.selected = max(0, len(m.state.queueDetails.messages)-1)
 	}
@@ -382,7 +416,6 @@ func (m model) updateMessagesTable() model {
 	return m
 }
 
-// formatRetention converts retention period from seconds to a human-readable format.
 func formatRetention(seconds string) string {
 	if seconds == "" {
 		return "-"
@@ -406,7 +439,6 @@ func formatRetention(seconds string) string {
 	return fmt.Sprintf("%ds", secs)
 }
 
-// centerText centers text within a given width using lipgloss.
 func centerText(text string, width int) string {
 	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(text)
 }

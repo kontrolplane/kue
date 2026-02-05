@@ -14,6 +14,7 @@ import (
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
+// queueDetailsState holds the state for the queue details view.
 type queueDetailsState struct {
 	selected        int
 	queue           kue.Queue
@@ -22,6 +23,7 @@ type queueDetailsState struct {
 	messagesTable   table.Model
 }
 
+// Message table column definitions.
 var messageColumnMap = map[int]string{
 	0: "message identifier",
 	1: "body",
@@ -125,18 +127,17 @@ func initMessageDetailsTable(height int) table.Model {
 }
 
 func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
-	// Clear any previous error
 	m.error = ""
-
-	// Switch page and trigger async loads
 	m = m.SwitchPage(queueDetails)
 	m.loading = true
 	m.loadingMsg = "Loading queue details..."
-
-	// Reset selected message
 	m.state.queueDetails.selected = 0
 
-	// Load queue attributes and messages in parallel
+	// Clear stale data to prevent showing old content during load
+	m.state.queueDetails.attributesTable = ""
+	m.state.queueDetails.messages = nil
+	m.state.queueDetails.messagesTable = initMessageDetailsTable(m.getMessageTableHeight())
+
 	return m, tea.Batch(
 		commands.LoadQueueAttributes(m.context, m.client, m.state.queueDetails.queue.Url),
 		commands.LoadMessages(m.context, m.client, m.state.queueDetails.queue.Url, 10),
@@ -184,7 +185,6 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
 		case key.Matches(msg, m.keys.View):
-			// Navigate to message details if messages exist
 			if len(m.state.queueDetails.messages) > 0 {
 				selected := m.state.queueDetails.selected
 				m.state.queueMessageDetails.message = m.state.queueDetails.messages[selected]
@@ -193,7 +193,6 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 				return m.QueueMessageDetailsSwitchPage(msg)
 			}
 		case key.Matches(msg, m.keys.DeleteMessage):
-			// Navigate to message delete confirmation
 			if len(m.state.queueDetails.messages) > 0 {
 				selected := m.state.queueDetails.selected
 				message := m.state.queueDetails.messages[selected]
@@ -205,7 +204,6 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.Create):
-			// Navigate to message creation
 			m.state.queueMessageCreate.queueName = m.state.queueDetails.queue.Name
 			m.state.queueMessageCreate.queueUrl = m.state.queueDetails.queue.Url
 			m.state.queueMessageCreate.isFifo = m.state.queueDetails.queue.FifoQueue == "true"
@@ -223,7 +221,15 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueDetailsView() string {
-	attributesTableView := m.state.queueDetails.attributesTable
+	var attributesTableView string
+	if m.state.queueDetails.attributesTable != "" {
+		attributesTableView = m.state.queueDetails.attributesTable
+	} else {
+		attributesTableView = lipgloss.NewStyle().
+			Foreground(styles.MediumGray).
+			Render("Loading queue attributes...")
+	}
+
 	messagesTableView := m.state.queueDetails.messagesTable.View()
 
 	if m.NoMessagesFound() {

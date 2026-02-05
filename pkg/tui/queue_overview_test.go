@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/help"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kontrolplane/kue/pkg/keys"
 	"github.com/kontrolplane/kue/pkg/kue"
@@ -17,7 +16,6 @@ func newTestModel() model {
 		programName: "kue",
 		page:        queueOverview,
 		keys:        keys.Keys,
-		help:        help.New(),
 		width:       100,
 		height:      50,
 		state: state{

@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/kontrolplane/kue/pkg/keys"
 	"github.com/kontrolplane/kue/pkg/kue"
 )
@@ -15,7 +14,6 @@ func newTestDeleteModel() model {
 		programName: "kue",
 		page:        queueDelete,
 		keys:        keys.Keys,
-		help:        help.New(),
 		width:       100,
 		height:      50,
 		state: state{

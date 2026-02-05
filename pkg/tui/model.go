@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/charmbracelet/bubbles/help"
 
 	"github.com/kontrolplane/kue/pkg/client"
 	keys "github.com/kontrolplane/kue/pkg/keys"
@@ -34,7 +33,7 @@ type model struct {
 	width       int
 	height      int
 	keys        keys.KeyMap
-	help        help.Model
+	showHelp    bool
 	error       string
 	loading     bool
 	loadingMsg  string

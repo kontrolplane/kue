@@ -95,14 +95,41 @@ func AttributesTableStyles() table.Styles {
 func FormTheme() *huh.Theme {
 	t := huh.ThemeBase()
 
+	// Focused field styles
 	t.Focused.Title = t.Focused.Title.Foreground(AccentColor).Bold(true)
-	t.Focused.Description = t.Focused.Description.Foreground(MediumGray)
+	t.Focused.Description = t.Focused.Description.Foreground(LightGray)
 	t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(AccentColor)
+	t.Focused.UnselectedOption = t.Focused.UnselectedOption.Foreground(LightGray)
 	t.Focused.FocusedButton = t.Focused.FocusedButton.Background(AccentColor).Foreground(TextWhite)
 	t.Focused.BlurredButton = t.Focused.BlurredButton.Background(DarkGray).Foreground(NearWhite)
+	t.Focused.TextInput.Cursor = t.Focused.TextInput.Cursor.Foreground(AccentColor)
+	t.Focused.TextInput.Placeholder = t.Focused.TextInput.Placeholder.Foreground(MediumGray)
+	t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(AccentColor)
+	t.Focused.NextIndicator = t.Focused.NextIndicator.Foreground(AccentColor)
+	t.Focused.PrevIndicator = t.Focused.PrevIndicator.Foreground(AccentColor)
 
-	t.Blurred.Title = t.Blurred.Title.Foreground(LightGray)
+	// Blurred field styles
+	t.Blurred.Title = t.Blurred.Title.Foreground(MediumGray)
 	t.Blurred.Description = t.Blurred.Description.Foreground(DarkGray)
+	t.Blurred.TextInput.Text = t.Blurred.TextInput.Text.Foreground(LightGray)
+
+	// Group title style (section headers)
+	t.Focused.Base = t.Focused.Base.BorderForeground(BorderColor)
+	t.Blurred.Base = t.Blurred.Base.BorderForeground(BorderColor)
 
 	return t
+}
+
+// FormSectionHeader returns a styled section header for forms.
+func FormSectionHeader(title string, width int) string {
+	return lipgloss.NewStyle().
+		Foreground(TextLight).
+		Bold(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(AccentColor).
+		Width(width).
+		MarginTop(1).
+		MarginBottom(1).
+		Render(title)
 }

@@ -10,15 +10,14 @@ import (
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
+// queueDeleteState holds the state for queue deletion confirmation.
 type queueDeleteState struct {
 	queue    kue.Queue
-	selected int
+	selected int // 0 = no, 1 = yes
 }
 
 func (m model) QueueDeleteSwitchPage(msg tea.Msg) (model, tea.Cmd) {
-	// Clear any previous error
 	m.error = ""
-	// Reset selection to "no" (safer default)
 	m.state.queueDelete.selected = 0
 	return m.SwitchPage(queueDelete), nil
 }
@@ -37,26 +36,15 @@ func (m model) QueueDeleteView() string {
 		confirm = styles.ButtonSecondary.Render(confirm)
 	}
 
-	buttons := lipgloss.JoinHorizontal(
-		lipgloss.Center,
-		abort,
-		"    ",
-		confirm,
-	)
-
-	dialog := lipgloss.JoinVertical(
-		lipgloss.Center,
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, abort, "    ", confirm)
+	dialog := lipgloss.JoinVertical(lipgloss.Center,
 		"warning: queue deletion",
 		"",
 		"are you sure you want to delete queue: "+queueName+" ?",
 		"",
 		buttons,
 	)
-
-	// Center dialog in the fixed content area
-	return lipgloss.Place(contentWidth, contentHeight-2,
-		lipgloss.Center, lipgloss.Center,
-		dialog)
+	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
 }
 
 func (m model) switchOption() (model, tea.Cmd) {
@@ -76,15 +64,11 @@ func (m model) QueueDeleteUpdate(msg tea.Msg) (model, tea.Cmd) {
 			m, cmd = m.switchOption()
 		case key.Matches(msg, m.keys.View):
 			if m.state.queueDelete.selected == 0 {
-				// User selected "no" - go back
-				m.state.queueDelete.selected = 0
 				return m.QueueOverviewSwitchPage(msg)
-			} else {
-				// User selected "yes" - delete the queue async
-				m.loading = true
-				m.loadingMsg = "Deleting queue..."
-				return m, commands.DeleteQueue(m.context, m.client, m.state.queueDelete.queue.Name)
 			}
+			m.loading = true
+			m.loadingMsg = "Deleting queue..."
+			return m, commands.DeleteQueue(m.context, m.client, m.state.queueDelete.queue.Name)
 		case key.Matches(msg, m.keys.Quit):
 			m.state.queueDelete.selected = 0
 			return m.QueueOverviewSwitchPage(msg)

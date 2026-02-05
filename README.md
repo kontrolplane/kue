@@ -93,8 +93,6 @@
 
 Kue uses [LocalStack](https://www.localstack.cloud/) running in Docker to simulate AWS SQS locally. This allows you to develop and test without connecting to real AWS services.
 
-**1. start LocalStack**
-
 ```bash
 docker run --rm -d \
   --name localstack \
@@ -103,15 +101,13 @@ docker run --rm -d \
   localstack/localstack
 ```
 
-**2. configure AWS endpoint**
-
 Set the `AWS_ENDPOINT_URL` environment variable to point to LocalStack:
 
 ```bash
 export AWS_ENDPOINT_URL=http://localhost:4566
 ```
 
-You can also set default AWS credentials (LocalStack accepts any values):
+You can also set default AWS credentials - LocalStack accepts any values:
 
 ```bash
 export AWS_ACCESS_KEY_ID=default

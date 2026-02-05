@@ -10,6 +10,7 @@ import (
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
+// queueMessageDeleteState holds the state for message deletion confirmation.
 type queueMessageDeleteState struct {
 	message   kue.Message
 	queueUrl  string
@@ -18,9 +19,7 @@ type queueMessageDeleteState struct {
 }
 
 func (m model) QueueMessageDeleteSwitchPage(msg tea.Msg) (model, tea.Cmd) {
-	// Clear any previous error
 	m.error = ""
-	// Reset selection to "no" (safer default)
 	m.state.queueMessageDelete.selected = 0
 	return m.SwitchPage(queueMessageDelete), nil
 }
@@ -44,15 +43,8 @@ func (m model) QueueMessageDeleteView() string {
 		confirm = styles.ButtonSecondary.Render(confirm)
 	}
 
-	buttons := lipgloss.JoinHorizontal(
-		lipgloss.Center,
-		abort,
-		"    ",
-		confirm,
-	)
-
-	dialog := lipgloss.JoinVertical(
-		lipgloss.Center,
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, abort, "    ", confirm)
+	dialog := lipgloss.JoinVertical(lipgloss.Center,
 		"warning: message deletion",
 		"",
 		"are you sure you want to delete message: "+messageID,
@@ -60,11 +52,7 @@ func (m model) QueueMessageDeleteView() string {
 		"",
 		buttons,
 	)
-
-	// Center dialog in the fixed content area
-	return lipgloss.Place(contentWidth, contentHeight-2,
-		lipgloss.Center, lipgloss.Center,
-		dialog)
+	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
 }
 
 func (m model) switchMessageDeleteOption() (model, tea.Cmd) {
@@ -84,23 +72,19 @@ func (m model) QueueMessageDeleteUpdate(msg tea.Msg) (model, tea.Cmd) {
 			m, cmd = m.switchMessageDeleteOption()
 		case key.Matches(msg, m.keys.View):
 			if m.state.queueMessageDelete.selected == 0 {
-				// User selected "no" - go back to previous page
-				m.state.queueMessageDelete.selected = 0
 				if m.previous == queueMessageDetails {
 					return m.QueueMessageDetailsSwitchPage(msg)
 				}
 				return m.QueueDetailsGoBack(msg)
-			} else {
-				// User selected "yes" - delete the message
-				m.loading = true
-				m.loadingMsg = "Deleting message..."
-				return m, commands.DeleteMessage(
-					m.context,
-					m.client,
-					m.state.queueMessageDelete.queueUrl,
-					m.state.queueMessageDelete.message.ReceiptHandle,
-				)
 			}
+			m.loading = true
+			m.loadingMsg = "Deleting message..."
+			return m, commands.DeleteMessage(
+				m.context,
+				m.client,
+				m.state.queueMessageDelete.queueUrl,
+				m.state.queueMessageDelete.message.ReceiptHandle,
+			)
 		case key.Matches(msg, m.keys.Quit):
 			m.state.queueMessageDelete.selected = 0
 			if m.previous == queueMessageDetails {
