@@ -111,6 +111,25 @@ func stripViewBeforeToken(view string, token string) string {
 	return strings.Join(lines[start:], "\n")
 }
 
+func renderMessagesTableHeader() string {
+	headerStyle := styles.TableStyles().Header
+
+	var headers []string
+	for _, col := range messageColumns {
+		headers = append(headers, headerStyle.Width(col.Width).Render(col.Title))
+	}
+	header := lipgloss.JoinHorizontal(lipgloss.Top, headers...)
+
+	// Create divider
+	totalWidth := 0
+	for _, col := range messageColumns {
+		totalWidth += col.Width
+	}
+	divider := headerStyle.Render(strings.Repeat("─", totalWidth))
+
+	return header + "\n" + divider
+}
+
 func initMessageDetailsTable(height int) table.Model {
 	if height < minTableHeight {
 		height = minTableHeight
@@ -230,15 +249,22 @@ func (m model) QueueDetailsView() string {
 			Render("Loading queue attributes...")
 	}
 
-	messagesTableView := m.state.queueDetails.messagesTable.View()
-
 	if m.NoMessagesFound() {
+		header := renderMessagesTableHeader()
+
 		emptyMsg := lipgloss.NewStyle().
 			Foreground(styles.MediumGray).
 			Render(fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name))
 
-		return attributesTableView + "\n\n" + messagesTableView + "\n\n" + emptyMsg
+		// Center the message in the remaining table area
+		tableHeight := m.getMessageTableHeight() - 2
+		centeredMsg := lipgloss.Place(contentWidth, tableHeight,
+			lipgloss.Center, lipgloss.Center,
+			emptyMsg)
+
+		return attributesTableView + "\n\n" + header + "\n" + centeredMsg
 	}
 
+	messagesTableView := m.state.queueDetails.messagesTable.View()
 	return attributesTableView + "\n\n" + messagesTableView
 }

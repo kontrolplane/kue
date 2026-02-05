@@ -262,7 +262,7 @@ func (m model) View() string {
 
 func (m model) renderShortHelp() string {
 	helpStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
-	return helpStyle.Render("? help • q quit")
+	return helpStyle.Render("enter view • ? help • / filter • q quit")
 }
 
 func (m model) renderHelpOverlay(background string) string {
@@ -272,14 +272,11 @@ func (m model) renderHelpOverlay(background string) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.AccentColor).
 		Padding(1, 3).
-		Background(lipgloss.Color("235")).
 		Render(helpContent)
 
 	return lipgloss.Place(contentWidth+4, contentHeight+10,
 		lipgloss.Center, lipgloss.Center,
 		overlay,
-		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("235")),
 	)
 }
 
