@@ -6,11 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var (
-	errNoPageSelected  = "No page selected"
-	errNoQueuesFound   = "No queues found"
-	errNoMessagesFound = "No messages found"
-)
+var errNoPageSelected = "No page selected"
 
 func (m model) ErrorView() string {
 	return m.error

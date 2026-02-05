@@ -6,7 +6,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/charmbracelet/bubbles/help"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kontrolplane/kue/pkg/client"
 	keys "github.com/kontrolplane/kue/pkg/keys"
 )
@@ -36,20 +35,9 @@ type model struct {
 	height      int
 	keys        keys.KeyMap
 	help        help.Model
-	table       tea.Model
 	error       string
 	loading     bool
 	loadingMsg  string
-}
-
-// getContentWidth returns the fixed content width.
-func (m model) getContentWidth() int {
-	return contentWidth
-}
-
-// getContentHeight returns the fixed content height.
-func (m model) getContentHeight() int {
-	return contentHeight
 }
 
 // getTableHeight returns the height available for tables.
