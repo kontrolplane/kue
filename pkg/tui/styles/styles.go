@@ -27,7 +27,8 @@ var (
 // MainBorder is the standard border style for main content areas.
 var MainBorder = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(BorderColor)
+	BorderForeground(BorderColor).
+	Padding(1, 0)
 
 // ButtonPrimary is the style for primary (unfocused/default) buttons.
 var ButtonPrimary = lipgloss.NewStyle().

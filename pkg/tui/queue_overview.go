@@ -23,14 +23,14 @@ var columnMap = map[int]string{
 	2: "available",
 	3: "not visible",
 	4: "delayed",
-	5: "has dlq",
-	6: "visibility",
-	7: "retention",
+	5: "visibility",
+	6: "retention",
+	7: "last updated",
 }
 
 var queueOverviewColumns []table.Column = []table.Column{
 	{
-		Title: columnMap[0], Width: 45,
+		Title: columnMap[0], Width: 40,
 	},
 	{
 		Title: columnMap[1], Width: 10,
@@ -39,7 +39,7 @@ var queueOverviewColumns []table.Column = []table.Column{
 		Title: columnMap[2], Width: 10,
 	},
 	{
-		Title: columnMap[3], Width: 15,
+		Title: columnMap[3], Width: 10,
 	},
 	{
 		Title: columnMap[4], Width: 10,
@@ -51,7 +51,7 @@ var queueOverviewColumns []table.Column = []table.Column{
 		Title: columnMap[6], Width: 10,
 	},
 	{
-		Title: columnMap[7], Width: 10,
+		Title: columnMap[7], Width: 20,
 	},
 }
 

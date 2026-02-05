@@ -34,6 +34,16 @@ type QueueDeletedMsg struct {
 	Err error
 }
 
+// MessageDeletedMsg is sent when a message has been deleted.
+type MessageDeletedMsg struct {
+	Err error
+}
+
+// MessageCreatedMsg is sent when a message has been sent to a queue.
+type MessageCreatedMsg struct {
+	Err error
+}
+
 // RefreshTickMsg is sent periodically to trigger data refresh.
 type RefreshTickMsg struct {
 	Page string // Identifies which page requested the refresh

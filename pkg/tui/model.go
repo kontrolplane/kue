@@ -75,4 +75,5 @@ type state struct {
 	queueCreate           queueCreateState
 	queueMessageDetails   queueMessageDetailsState
 	queueMessageCreate    queueMessageCreateState
+	queueMessageDelete    queueMessageDeleteState
 }

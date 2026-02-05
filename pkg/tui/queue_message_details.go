@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,61 +14,39 @@ import (
 type queueMessageDetailsState struct {
 	message   kue.Message
 	queueName string
-	viewport  viewport.Model
-	ready     bool
+	queueUrl  string
 }
 
 func (m model) QueueMessageDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	// Clear any previous error
 	m.error = ""
 
-	// Initialize viewport for scrollable content
-	m.state.queueMessageDetails.ready = false
-
 	return m.SwitchPage(queueMessageDetails), nil
 }
 
 func (m model) QueueMessageDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		// Initialize or resize viewport with fixed dimensions
-		if !m.state.queueMessageDetails.ready {
-			m.state.queueMessageDetails.viewport = viewport.New(contentWidth, contentHeight)
-			m.state.queueMessageDetails.viewport.SetContent(m.renderMessageDetails())
-			m.state.queueMessageDetails.ready = true
-		} else {
-			m.state.queueMessageDetails.viewport.Width = contentWidth
-			m.state.queueMessageDetails.viewport.Height = contentHeight
-		}
-
 	case tea.KeyMsg:
 		switch {
+		case key.Matches(msg, m.keys.DeleteMessage):
+			// Navigate to message delete confirmation
+			if m.state.queueMessageDetails.message.ReceiptHandle != "" {
+				m.state.queueMessageDelete.message = m.state.queueMessageDetails.message
+				m.state.queueMessageDelete.queueUrl = m.state.queueMessageDetails.queueUrl
+				m.state.queueMessageDelete.queueName = m.state.queueMessageDetails.queueName
+				return m.QueueMessageDeleteSwitchPage(msg)
+			}
 		case key.Matches(msg, m.keys.Quit):
-			// Go back to queue details
-			return m.QueueDetailsSwitchPage(msg)
-		default:
-			// Pass to viewport for scrolling
-			m.state.queueMessageDetails.viewport, cmd = m.state.queueMessageDetails.viewport.Update(msg)
-			cmds = append(cmds, cmd)
+			// Go back to queue details without reloading
+			return m.QueueDetailsGoBack(msg)
 		}
 	}
 
-	return m, tea.Batch(cmds...)
+	return m, nil
 }
 
 func (m model) QueueMessageDetailsView() string {
-	if !m.state.queueMessageDetails.ready {
-		// Viewport not ready yet, render content directly
-		return m.renderMessageDetails()
-	}
-
-	// Update viewport content in case it changed
-	m.state.queueMessageDetails.viewport.SetContent(m.renderMessageDetails())
-
-	return m.state.queueMessageDetails.viewport.View()
+	return m.renderMessageDetails()
 }
 
 // renderMessageDetails renders the full message details content.

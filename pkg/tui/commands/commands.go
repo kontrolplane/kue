@@ -71,6 +71,22 @@ func DeleteQueue(ctx context.Context, client *sqs.Client, queueName string) tea.
 	}
 }
 
+// DeleteMessage creates a command to delete a message from a queue.
+func DeleteMessage(ctx context.Context, client *sqs.Client, queueUrl string, receiptHandle string) tea.Cmd {
+	return func() tea.Msg {
+		err := kue.DeleteMessage(client, ctx, queueUrl, receiptHandle)
+		return messages.MessageDeletedMsg{Err: err}
+	}
+}
+
+// SendMessage creates a command to send a message to a queue.
+func SendMessage(ctx context.Context, client *sqs.Client, input kue.SendMessageInput) tea.Cmd {
+	return func() tea.Msg {
+		err := kue.SendMessage(client, ctx, input)
+		return messages.MessageCreatedMsg{Err: err}
+	}
+}
+
 // RefreshTick creates a command that sends a refresh message after the given duration.
 func RefreshTick(d time.Duration, page string) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg {

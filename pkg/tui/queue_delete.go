@@ -18,6 +18,8 @@ type queueDeleteState struct {
 func (m model) QueueDeleteSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	// Clear any previous error
 	m.error = ""
+	// Reset selection to "no" (safer default)
+	m.state.queueDelete.selected = 0
 	return m.SwitchPage(queueDelete), nil
 }
 
@@ -28,11 +30,11 @@ func (m model) QueueDeleteView() string {
 	abort := "no"
 
 	if m.state.queueDelete.selected == 0 {
-		confirm = styles.ButtonPrimary.Render(confirm)
 		abort = styles.ButtonSecondary.Render(abort)
+		confirm = styles.ButtonPrimary.Render(confirm)
 	} else {
-		confirm = styles.ButtonSecondary.Render(confirm)
 		abort = styles.ButtonPrimary.Render(abort)
+		confirm = styles.ButtonSecondary.Render(confirm)
 	}
 
 	buttons := lipgloss.JoinHorizontal(

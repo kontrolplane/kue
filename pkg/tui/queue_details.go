@@ -143,6 +143,12 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	)
 }
 
+// QueueDetailsGoBack returns to queue details without reloading data.
+func (m model) QueueDetailsGoBack(msg tea.Msg) (model, tea.Cmd) {
+	m.error = ""
+	return m.SwitchPage(queueDetails), nil
+}
+
 func (m model) NoMessagesFound() bool {
 	return m.MessagesCount() == 0
 }
@@ -183,8 +189,27 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 				selected := m.state.queueDetails.selected
 				m.state.queueMessageDetails.message = m.state.queueDetails.messages[selected]
 				m.state.queueMessageDetails.queueName = m.state.queueDetails.queue.Name
+				m.state.queueMessageDetails.queueUrl = m.state.queueDetails.queue.Url
 				return m.QueueMessageDetailsSwitchPage(msg)
 			}
+		case key.Matches(msg, m.keys.DeleteMessage):
+			// Navigate to message delete confirmation
+			if len(m.state.queueDetails.messages) > 0 {
+				selected := m.state.queueDetails.selected
+				message := m.state.queueDetails.messages[selected]
+				if message.ReceiptHandle != "" {
+					m.state.queueMessageDelete.message = message
+					m.state.queueMessageDelete.queueUrl = m.state.queueDetails.queue.Url
+					m.state.queueMessageDelete.queueName = m.state.queueDetails.queue.Name
+					return m.QueueMessageDeleteSwitchPage(msg)
+				}
+			}
+		case key.Matches(msg, m.keys.Create):
+			// Navigate to message creation
+			m.state.queueMessageCreate.queueName = m.state.queueDetails.queue.Name
+			m.state.queueMessageCreate.queueUrl = m.state.queueDetails.queue.Url
+			m.state.queueMessageCreate.isFifo = m.state.queueDetails.queue.FifoQueue == "true"
+			return m.QueueMessageCreateSwitchPage(msg)
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueOverviewSwitchPage(msg)
 		default:

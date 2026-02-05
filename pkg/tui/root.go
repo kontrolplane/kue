@@ -150,6 +150,42 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.SwitchPage(queueOverview)
 		cmds = append(cmds, commands.LoadQueues(m.context, m.client))
 
+	case messages.MessageDeletedMsg:
+		m.loading = false
+		m.loadingMsg = ""
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error deleting message: %v", msg.Err)
+		} else {
+			// Refresh messages - stay on current page if queue details, otherwise go to queue details
+			queueUrl := m.state.queueDetails.queue.Url
+			if m.page != queueDetails {
+				m = m.SwitchPage(queueDetails)
+			}
+			// Adjust selection if needed
+			if m.state.queueDetails.selected >= len(m.state.queueDetails.messages)-1 && m.state.queueDetails.selected > 0 {
+				m.state.queueDetails.selected--
+			}
+			cmds = append(cmds, tea.Batch(
+				commands.LoadQueueAttributes(m.context, m.client, queueUrl),
+				commands.LoadMessages(m.context, m.client, queueUrl, 10),
+			))
+		}
+
+	case messages.MessageCreatedMsg:
+		m.loading = false
+		m.loadingMsg = ""
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error sending message: %v", msg.Err)
+		} else {
+			// Go back to queue details and refresh messages
+			queueUrl := m.state.queueMessageCreate.queueUrl
+			m = m.SwitchPage(queueDetails)
+			cmds = append(cmds, tea.Batch(
+				commands.LoadQueueAttributes(m.context, m.client, queueUrl),
+				commands.LoadMessages(m.context, m.client, queueUrl, 10),
+			))
+		}
+
 	case messages.RefreshTickMsg:
 		// Only refresh if still on the same page that requested it
 		switch msg.Page {
@@ -180,6 +216,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.QueueDeleteUpdate(msg)
 	case queueMessageDetails:
 		m, cmd = m.QueueMessageDetailsUpdate(msg)
+	case queueMessageDelete:
+		m, cmd = m.QueueMessageDeleteUpdate(msg)
+	case queueMessageCreate:
+		m, cmd = m.QueueMessageCreateUpdate(msg)
 	}
 
 	if cmd != nil {
@@ -211,6 +251,10 @@ func (m model) View() string {
 			c = m.QueueDeleteView()
 		case queueMessageDetails:
 			c = m.QueueMessageDetailsView()
+		case queueMessageDelete:
+			c = m.QueueMessageDeleteView()
+		case queueMessageCreate:
+			c = m.QueueMessageCreateView()
 		default:
 			c = errNoPageSelected
 		}
@@ -285,12 +329,6 @@ func (m model) updateQueueOverviewTable() model {
 			queueType = "fifo"
 		}
 
-		// Format DLQ as Yes/No
-		dlq := "no"
-		if queue.DeadLetterTargetARN != "" {
-			dlq = "yes"
-		}
-
 		// Format visibility timeout (seconds)
 		visibility := queue.VisibilityTimeout + "s"
 
@@ -301,11 +339,11 @@ func (m model) updateQueueOverviewTable() model {
 			queue.Name,
 			queueType,
 			centerText(queue.ApproximateNumberOfMessages, 10),
-			centerText(queue.ApproximateNumberOfMessagesNotVisible, 15),
+			centerText(queue.ApproximateNumberOfMessagesNotVisible, 10),
 			centerText(queue.ApproximateNumberOfMessagesDelayed, 10),
-			centerText(dlq, 10),
 			centerText(visibility, 10),
 			centerText(retention, 10),
+			queue.LastModified,
 		})
 	}
 
