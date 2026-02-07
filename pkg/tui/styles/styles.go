@@ -17,11 +17,14 @@ var (
 	TextLight = lipgloss.Color("255")
 
 	// Background/border colors
-	BorderColor    = lipgloss.Color("240")
-	DarkGray       = lipgloss.Color("240")
-	MediumGray     = lipgloss.Color("243")
-	LightGray      = lipgloss.Color("250")
-	NearWhite      = lipgloss.Color("255")
+	BorderColor = lipgloss.Color("240")
+	DarkGray    = lipgloss.Color("240")
+	MediumGray  = lipgloss.Color("243")
+	LightGray   = lipgloss.Color("250")
+	NearWhite   = lipgloss.Color("255")
+
+	// Danger/warning colors
+	DangerRed = lipgloss.Color("#ff5555")
 )
 
 // MainBorder is the standard border style for main content areas.

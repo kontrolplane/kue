@@ -137,6 +137,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.error = fmt.Sprintf("Error deleting queue: %v", msg.Err)
 		}
 		m.state.queueDelete.selected = 0
+		m.state.queueOverview.selectedItems = make(map[int]bool) // Clear selection after deletion
 		m = m.SwitchPage(queueOverview)
 		cmds = append(cmds, commands.LoadQueues(m.context, m.client))
 
@@ -150,6 +151,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.page != queueDetails {
 				m = m.SwitchPage(queueDetails)
 			}
+			m.state.queueDetails.selectedItems = make(map[int]bool) // Clear selection after deletion
 			if m.state.queueDetails.selected >= len(m.state.queueDetails.messages)-1 && m.state.queueDetails.selected > 0 {
 				m.state.queueDetails.selected--
 			}
@@ -308,6 +310,7 @@ func (m model) renderHelpContent() string {
 
 	actions := lipgloss.JoinVertical(lipgloss.Left,
 		titleStyle.Render("Actions"),
+		row("space", "toggle select"),
 		row("ctrl+n", "create new"),
 		row("ctrl+d", "delete"),
 		row("/", "filter"),
@@ -363,7 +366,7 @@ func (m model) resizeTables() model {
 
 func (m model) updateQueueOverviewTable() model {
 	var rows []table.Row
-	for _, queue := range m.state.queueOverview.queues {
+	for i, queue := range m.state.queueOverview.queues {
 		queueType := "standard"
 		if queue.FifoQueue == "true" {
 			queueType = "fifo"
@@ -371,8 +374,14 @@ func (m model) updateQueueOverviewTable() model {
 		visibility := queue.VisibilityTimeout + "s"
 		retention := formatRetention(queue.MessageRetentionPeriod)
 
+		// Add selection indicator to queue name
+		queueName := queue.Name
+		if m.state.queueOverview.selectedItems[i] {
+			queueName = "● " + queue.Name
+		}
+
 		rows = append(rows, table.Row{
-			queue.Name,
+			queueName,
 			queueType,
 			centerText(queue.ApproximateNumberOfMessages, 10),
 			centerText(queue.ApproximateNumberOfMessagesNotVisible, 10),
@@ -394,9 +403,15 @@ func (m model) updateQueueOverviewTable() model {
 
 func (m model) updateMessagesTable() model {
 	var rows []table.Row
-	for _, message := range m.state.queueDetails.messages {
+	for i, message := range m.state.queueDetails.messages {
+		// Add selection indicator to message ID
+		messageID := message.MessageID
+		if m.state.queueDetails.selectedItems[i] {
+			messageID = "● " + message.MessageID
+		}
+
 		rows = append(rows, table.Row{
-			message.MessageID,
+			messageID,
 			message.Body,
 			message.SentTimestamp,
 			fmt.Sprintf("%d", len(message.Body)),

@@ -21,6 +21,7 @@ type queueDetailsState struct {
 	messages        []kue.Message
 	attributesTable string
 	messagesTable   table.Model
+	selectedItems   map[int]bool // tracks which messages are selected for bulk operations
 }
 
 // Message table column definitions.
@@ -151,6 +152,7 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	m.loading = true
 	m.loadingMsg = "Loading queue details..."
 	m.state.queueDetails.selected = 0
+	m.state.queueDetails.selectedItems = make(map[int]bool)
 
 	// Clear stale data to prevent showing old content during load
 	m.state.queueDetails.attributesTable = ""
@@ -191,6 +193,32 @@ func (m model) previousMessage() (model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) toggleMessageSelection() (model, tea.Cmd) {
+	if len(m.state.queueDetails.messages) == 0 {
+		return m, nil
+	}
+	idx := m.state.queueDetails.selected
+	if m.state.queueDetails.selectedItems == nil {
+		m.state.queueDetails.selectedItems = make(map[int]bool)
+	}
+	if m.state.queueDetails.selectedItems[idx] {
+		delete(m.state.queueDetails.selectedItems, idx)
+	} else {
+		m.state.queueDetails.selectedItems[idx] = true
+	}
+	return m, nil
+}
+
+func (m model) getSelectedMessages() []kue.Message {
+	var messages []kue.Message
+	for idx := range m.state.queueDetails.selectedItems {
+		if idx < len(m.state.queueDetails.messages) {
+			messages = append(messages, m.state.queueDetails.messages[idx])
+		}
+	}
+	return messages
+}
+
 func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -203,6 +231,8 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousMessage()
 			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
+		case key.Matches(msg, m.keys.Select):
+			m, cmd = m.toggleMessageSelection()
 		case key.Matches(msg, m.keys.View):
 			if len(m.state.queueDetails.messages) > 0 {
 				selected := m.state.queueDetails.selected
@@ -213,10 +243,17 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.DeleteMessage):
 			if len(m.state.queueDetails.messages) > 0 {
-				selected := m.state.queueDetails.selected
-				message := m.state.queueDetails.messages[selected]
-				if message.ReceiptHandle != "" {
-					m.state.queueMessageDelete.message = message
+				// If items are selected, delete selected items; otherwise delete current item
+				if len(m.state.queueDetails.selectedItems) > 0 {
+					m.state.queueMessageDelete.messages = m.getSelectedMessages()
+				} else {
+					selected := m.state.queueDetails.selected
+					message := m.state.queueDetails.messages[selected]
+					if message.ReceiptHandle != "" {
+						m.state.queueMessageDelete.messages = []kue.Message{message}
+					}
+				}
+				if len(m.state.queueMessageDelete.messages) > 0 {
 					m.state.queueMessageDelete.queueUrl = m.state.queueDetails.queue.Url
 					m.state.queueMessageDelete.queueName = m.state.queueDetails.queue.Name
 					return m.QueueMessageDeleteSwitchPage(msg)
@@ -228,6 +265,11 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 			m.state.queueMessageCreate.isFifo = m.state.queueDetails.queue.FifoQueue == "true"
 			return m.QueueMessageCreateSwitchPage(msg)
 		case key.Matches(msg, m.keys.Quit):
+			// If items are selected, clear selection instead of going back
+			if len(m.state.queueDetails.selectedItems) > 0 {
+				m.state.queueDetails.selectedItems = make(map[int]bool)
+				return m, nil
+			}
 			return m.QueueOverviewSwitchPage(msg)
 		default:
 			m.state.queueDetails.messagesTable, cmd = m.state.queueDetails.messagesTable.Update(msg)
@@ -265,6 +307,17 @@ func (m model) QueueDetailsView() string {
 		return attributesTableView + "\n\n" + header + "\n" + centeredMsg
 	}
 
+	// Rebuild table rows to reflect current selection state
+	m = m.updateMessagesTable()
 	messagesTableView := m.state.queueDetails.messagesTable.View()
+
+	// Show selection count if items are selected
+	if len(m.state.queueDetails.selectedItems) > 0 {
+		selectionInfo := lipgloss.NewStyle().
+			Foreground(styles.AccentColor).
+			Render(fmt.Sprintf("%d message(s) selected - press ctrl + d to delete", len(m.state.queueDetails.selectedItems)))
+		return attributesTableView + "\n\n" + messagesTableView + "\n" + selectionInfo
+	}
+
 	return attributesTableView + "\n\n" + messagesTableView
 }

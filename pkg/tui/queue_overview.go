@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
@@ -13,9 +15,10 @@ import (
 
 // queueOverviewState holds the state for the queue listing view.
 type queueOverviewState struct {
-	selected int
-	queues   []kue.Queue
-	table    table.Model
+	selected      int
+	queues        []kue.Queue
+	table         table.Model
+	selectedItems map[int]bool // tracks which items are selected for bulk operations
 }
 
 // Queue table column definitions.
@@ -62,6 +65,7 @@ func (m model) QueueOverviewSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	m = m.SwitchPage(queueOverview)
 	m.loading = true
 	m.loadingMsg = "Loading queues..."
+	m.state.queueOverview.selectedItems = make(map[int]bool)
 	return m, commands.LoadQueues(m.context, m.client)
 }
 
@@ -103,6 +107,32 @@ func (m model) previousQueue() (model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) toggleQueueSelection() (model, tea.Cmd) {
+	if len(m.state.queueOverview.queues) == 0 {
+		return m, nil
+	}
+	idx := m.state.queueOverview.selected
+	if m.state.queueOverview.selectedItems == nil {
+		m.state.queueOverview.selectedItems = make(map[int]bool)
+	}
+	if m.state.queueOverview.selectedItems[idx] {
+		delete(m.state.queueOverview.selectedItems, idx)
+	} else {
+		m.state.queueOverview.selectedItems[idx] = true
+	}
+	return m, nil
+}
+
+func (m model) getSelectedQueues() []kue.Queue {
+	var queues []kue.Queue
+	for idx := range m.state.queueOverview.selectedItems {
+		if idx < len(m.state.queueOverview.queues) {
+			queues = append(queues, m.state.queueOverview.queues[idx])
+		}
+	}
+	return queues
+}
+
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -114,6 +144,8 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 			m, cmd = m.nextQueue()
 		case key.Matches(msg, m.keys.Up):
 			m, cmd = m.previousQueue()
+		case key.Matches(msg, m.keys.Select):
+			m, cmd = m.toggleQueueSelection()
 		case key.Matches(msg, m.keys.View):
 			if len(m.state.queueOverview.queues) > 0 {
 				selected := m.state.queueOverview.selected
@@ -124,11 +156,21 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 			return m.QueueCreateSwitchPage(msg)
 		case key.Matches(msg, m.keys.Delete):
 			if len(m.state.queueOverview.queues) > 0 {
-				selected := m.state.queueOverview.selected
-				m.state.queueDelete.queue = m.state.queueOverview.queues[selected]
+				// If items are selected, delete selected items; otherwise delete current item
+				if len(m.state.queueOverview.selectedItems) > 0 {
+					m.state.queueDelete.queues = m.getSelectedQueues()
+				} else {
+					selected := m.state.queueOverview.selected
+					m.state.queueDelete.queues = []kue.Queue{m.state.queueOverview.queues[selected]}
+				}
 				return m.QueueDeleteSwitchPage(msg)
 			}
 		case key.Matches(msg, m.keys.Quit):
+			// If items are selected, clear selection instead of quitting
+			if len(m.state.queueOverview.selectedItems) > 0 {
+				m.state.queueOverview.selectedItems = make(map[int]bool)
+				return m, nil
+			}
 			return m, tea.Quit
 		default:
 			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
@@ -141,7 +183,8 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueOverviewView() string {
-	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+	// Rebuild table rows to reflect current selection state
+	m = m.updateQueueOverviewTable()
 	tableView := m.state.queueOverview.table.View()
 
 	if m.NoQueuesFound() {
@@ -150,6 +193,14 @@ func (m model) QueueOverviewView() string {
 			Render("No queues found. Press Ctrl+N to create a new queue.")
 
 		return tableView + "\n\n" + emptyMsg
+	}
+
+	// Show selection count if items are selected
+	if len(m.state.queueOverview.selectedItems) > 0 {
+		selectionInfo := lipgloss.NewStyle().
+			Foreground(styles.AccentColor).
+			Render(fmt.Sprintf("%d queue(s) selected - press ctrl + d to delete", len(m.state.queueOverview.selectedItems)))
+		return tableView + "\n" + selectionInfo
 	}
 
 	return tableView

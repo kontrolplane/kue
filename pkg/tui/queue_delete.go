@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
 
@@ -13,6 +15,7 @@ import (
 // queueDeleteState holds the state for queue deletion confirmation.
 type queueDeleteState struct {
 	queue    kue.Queue
+	queues   []kue.Queue
 	selected int // 0 = no, 1 = yes
 }
 
@@ -23,7 +26,14 @@ func (m model) QueueDeleteSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueDeleteView() string {
-	queueName := styles.Bold.Render(m.state.queueDelete.queue.Name)
+	numQueues := len(m.state.queueDelete.queues)
+
+	var queueDisplay string
+	if numQueues == 1 {
+		queueDisplay = styles.Bold.Render(m.state.queueDelete.queues[0].Name)
+	} else {
+		queueDisplay = styles.Bold.Render(fmt.Sprintf("%d queues", numQueues))
+	}
 
 	confirm := "yes"
 	abort := "no"
@@ -40,7 +50,7 @@ func (m model) QueueDeleteView() string {
 	dialog := lipgloss.JoinVertical(lipgloss.Center,
 		"warning: queue deletion",
 		"",
-		"are you sure you want to delete queue: "+queueName+" ?",
+		"are you sure you want to delete: "+queueDisplay+" ?",
 		"",
 		buttons,
 	)
@@ -67,8 +77,13 @@ func (m model) QueueDeleteUpdate(msg tea.Msg) (model, tea.Cmd) {
 				return m.QueueOverviewSwitchPage(msg)
 			}
 			m.loading = true
-			m.loadingMsg = "Deleting queue..."
-			return m, commands.DeleteQueue(m.context, m.client, m.state.queueDelete.queue.Name)
+			numQueues := len(m.state.queueDelete.queues)
+			if numQueues == 1 {
+				m.loadingMsg = "Deleting queue..."
+				return m, commands.DeleteQueue(m.context, m.client, m.state.queueDelete.queues[0].Name)
+			}
+			m.loadingMsg = fmt.Sprintf("Deleting %d queues...", numQueues)
+			return m, commands.DeleteQueues(m.context, m.client, m.state.queueDelete.queues)
 		case key.Matches(msg, m.keys.Quit):
 			m.state.queueDelete.selected = 0
 			return m.QueueOverviewSwitchPage(msg)

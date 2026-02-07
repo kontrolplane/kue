@@ -26,9 +26,11 @@ func newTestDeleteModel() model {
 			},
 			queueDelete: queueDeleteState{
 				selected: 0,
-				queue: kue.Queue{
-					Name: "test-queue-to-delete",
-					Url:  "http://test/test-queue-to-delete",
+				queues: []kue.Queue{
+					{
+						Name: "test-queue-to-delete",
+						Url:  "http://test/test-queue-to-delete",
+					},
 				},
 			},
 		},
@@ -81,7 +83,7 @@ func TestQueueDeleteViewContainsConfirmationQuestion(t *testing.T) {
 
 	view := m.QueueDeleteView()
 
-	if !strings.Contains(view, "are you sure you want to delete queue") {
+	if !strings.Contains(view, "are you sure you want to delete") {
 		t.Error("Expected view to contain confirmation question")
 	}
 }

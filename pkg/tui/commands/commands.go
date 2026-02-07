@@ -71,11 +71,35 @@ func DeleteQueue(ctx context.Context, client *sqs.Client, queueName string) tea.
 	}
 }
 
+// DeleteQueues creates a command to delete multiple queues.
+func DeleteQueues(ctx context.Context, client *sqs.Client, queues []kue.Queue) tea.Cmd {
+	return func() tea.Msg {
+		for _, q := range queues {
+			if err := kue.DeleteQueue(client, ctx, q.Name); err != nil {
+				return messages.QueueDeletedMsg{Err: err}
+			}
+		}
+		return messages.QueueDeletedMsg{Err: nil}
+	}
+}
+
 // DeleteMessage creates a command to delete a message from a queue.
 func DeleteMessage(ctx context.Context, client *sqs.Client, queueUrl string, receiptHandle string) tea.Cmd {
 	return func() tea.Msg {
 		err := kue.DeleteMessage(client, ctx, queueUrl, receiptHandle)
 		return messages.MessageDeletedMsg{Err: err}
+	}
+}
+
+// DeleteMessages creates a command to delete multiple messages from a queue.
+func DeleteMessages(ctx context.Context, client *sqs.Client, queueUrl string, msgs []kue.Message) tea.Cmd {
+	return func() tea.Msg {
+		for _, msg := range msgs {
+			if err := kue.DeleteMessage(client, ctx, queueUrl, msg.ReceiptHandle); err != nil {
+				return messages.MessageDeletedMsg{Err: err}
+			}
+		}
+		return messages.MessageDeletedMsg{Err: nil}
 	}
 }
 

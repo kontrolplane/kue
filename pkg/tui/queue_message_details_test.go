@@ -4,11 +4,30 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/kontrolplane/kue/pkg/keys"
 	"github.com/kontrolplane/kue/pkg/kue"
 )
 
 func newTestMessageDetailsModel() model {
+	msg := kue.Message{
+		MessageID:     "msg-12345-abcde",
+		Body:          `{"key": "value", "data": "test message body"}`,
+		MD5OfBody:     "abc123def456",
+		SentTimestamp: "2024-01-15T10:30:00Z",
+		ReceiveCount:  "3",
+		Attributes: map[string]string{
+			"SenderId": "123456789",
+		},
+		MessageAttributes: map[string]string{
+			"CustomAttr": "custom-value",
+		},
+	}
+
+	// Initialize viewport with message body
+	vp := viewport.New(detailsRightContentWidth, detailsViewportHeight)
+	vp.SetContent(msg.Body)
+
 	return model{
 		projectName: "test",
 		programName: "kue",
@@ -30,19 +49,8 @@ func newTestMessageDetailsModel() model {
 			},
 			queueMessageDetails: queueMessageDetailsState{
 				queueName: "test-queue",
-				message: kue.Message{
-					MessageID:     "msg-12345-abcde",
-					Body:          `{"key": "value", "data": "test message body"}`,
-					MD5OfBody:     "abc123def456",
-					SentTimestamp: "2024-01-15T10:30:00Z",
-					ReceiveCount:  "3",
-					Attributes: map[string]string{
-						"SenderId": "123456789",
-					},
-					MessageAttributes: map[string]string{
-						"CustomAttr": "custom-value",
-					},
-				},
+				message:   msg,
+				viewport:  vp,
 			},
 		},
 	}

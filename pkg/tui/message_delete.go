@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
 
@@ -13,6 +15,7 @@ import (
 // queueMessageDeleteState holds the state for message deletion confirmation.
 type queueMessageDeleteState struct {
 	message   kue.Message
+	messages  []kue.Message
 	queueUrl  string
 	queueName string
 	selected  int // 0 = no, 1 = yes
@@ -25,11 +28,18 @@ func (m model) QueueMessageDeleteSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) QueueMessageDeleteView() string {
-	messageID := m.state.queueMessageDelete.message.MessageID
-	if len(messageID) > 20 {
-		messageID = messageID[:20] + "..."
+	numMessages := len(m.state.queueMessageDelete.messages)
+
+	var messageDisplay string
+	if numMessages == 1 {
+		messageID := m.state.queueMessageDelete.messages[0].MessageID
+		if len(messageID) > 20 {
+			messageID = messageID[:20] + "..."
+		}
+		messageDisplay = styles.Bold.Render(messageID)
+	} else {
+		messageDisplay = styles.Bold.Render(fmt.Sprintf("%d messages", numMessages))
 	}
-	messageID = styles.Bold.Render(messageID)
 	queueName := styles.Bold.Render(m.state.queueMessageDelete.queueName)
 
 	confirm := "yes"
@@ -47,7 +57,7 @@ func (m model) QueueMessageDeleteView() string {
 	dialog := lipgloss.JoinVertical(lipgloss.Center,
 		"warning: message deletion",
 		"",
-		"are you sure you want to delete message: "+messageID,
+		"are you sure you want to delete: "+messageDisplay,
 		"from queue: "+queueName+" ?",
 		"",
 		buttons,
@@ -78,12 +88,22 @@ func (m model) QueueMessageDeleteUpdate(msg tea.Msg) (model, tea.Cmd) {
 				return m.QueueDetailsGoBack(msg)
 			}
 			m.loading = true
-			m.loadingMsg = "Deleting message..."
-			return m, commands.DeleteMessage(
+			numMessages := len(m.state.queueMessageDelete.messages)
+			if numMessages == 1 {
+				m.loadingMsg = "Deleting message..."
+				return m, commands.DeleteMessage(
+					m.context,
+					m.client,
+					m.state.queueMessageDelete.queueUrl,
+					m.state.queueMessageDelete.messages[0].ReceiptHandle,
+				)
+			}
+			m.loadingMsg = fmt.Sprintf("Deleting %d messages...", numMessages)
+			return m, commands.DeleteMessages(
 				m.context,
 				m.client,
 				m.state.queueMessageDelete.queueUrl,
-				m.state.queueMessageDelete.message.ReceiptHandle,
+				m.state.queueMessageDelete.messages,
 			)
 		case key.Matches(msg, m.keys.Quit):
 			m.state.queueMessageDelete.selected = 0
