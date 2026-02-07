@@ -82,16 +82,12 @@
 
 ## development
 
-### prerequisites
-
-- [Docker](https://www.docker.com/)
-- [LocalStack](https://www.localstack.cloud/)
-- [Earthly](https://earthly.dev/)
-- [Go](https://go.dev/) 1.23+
-
-### setup
-
 Kue uses [LocalStack](https://www.localstack.cloud/) running in Docker to simulate AWS SQS locally. This allows you to develop and test without connecting to real AWS services.
+
+- [docker](https://www.docker.com/)
+- [localstack](https://www.localstack.cloud/)
+- [earthly](https://earthly.dev/)
+- [go](https://go.dev/) 1.23+
 
 ```bash
 docker run --rm -d \
@@ -101,21 +97,12 @@ docker run --rm -d \
   localstack/localstack
 ```
 
-Set the `AWS_ENDPOINT_URL` environment variable to point to LocalStack:
-
 ```bash
 export AWS_ENDPOINT_URL=http://localhost:4566
-```
-
-You can also set default AWS credentials - LocalStack accepts any values:
-
-```bash
 export AWS_ACCESS_KEY_ID=default
 export AWS_SECRET_ACCESS_KEY=default
 export AWS_DEFAULT_REGION=us-east-1
 ```
-
-### creating sample queues and messages
 
 The project includes an [Earthfile](./Earthfile) with targets to quickly set up sample SQS queues and messages for development.
 
@@ -131,10 +118,10 @@ earthly +queues
 earthly +messages
 ```
 
-**list queues**
+To show the changes made in the repository readme, the following command can be ran which automatically creates the preview gif & screenshots:
 
 ```bash
-earthly +list
+earthly +vhs
 ```
 
 ### running kontrolplan/kue locally
