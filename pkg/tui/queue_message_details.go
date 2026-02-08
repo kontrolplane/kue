@@ -23,6 +23,7 @@ type queueMessageDetailsState struct {
 	message   kue.Message
 	queueName string
 	queueUrl  string
+	isFifo    bool
 	viewport  viewport.Model
 }
 
@@ -99,9 +100,18 @@ func (m model) renderMessageDetails() string {
 		)
 	}
 
-	// Left panel - message metadata
+	// Left panel - queue information first
 	var leftSections []string
-	leftSections = append(leftSections, sectionHeader.Render("Basic Information"))
+	leftSections = append(leftSections, sectionHeader.Render("Queue Information"))
+	leftSections = append(leftSections, row("Queue Name", m.state.queueMessageDetails.queueName))
+	queueType := "Standard"
+	if m.state.queueMessageDetails.isFifo {
+		queueType = "FIFO"
+	}
+	leftSections = append(leftSections, row("Queue Type", queueType))
+
+	// Message metadata
+	leftSections = append(leftSections, sectionHeader.MarginTop(1).Render("Basic Information"))
 	leftSections = append(leftSections, row("Message ID", msg.MessageID))
 	leftSections = append(leftSections, row("Sent", msg.SentTimestamp))
 	if msg.FirstReceiveTime != "" {
