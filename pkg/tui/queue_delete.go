@@ -14,7 +14,6 @@ import (
 
 // queueDeleteState holds the state for queue deletion confirmation.
 type queueDeleteState struct {
-	queue    kue.Queue
 	queues   []kue.Queue
 	selected int // 0 = no, 1 = yes
 }
