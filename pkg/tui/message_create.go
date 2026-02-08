@@ -23,10 +23,10 @@ type queueMessageCreateState struct {
 }
 
 const (
-	messageLeftPanelWidth  = 50
-	messageRightPanelWidth = 86
-	messageTextareaWidth   = messageRightPanelWidth - 4 // Panel padding(4)
-	messageTextareaHeight  = contentHeight - 8          // Height for textarea minus headers and panel padding
+	messageLeftPanelWidth  = (contentWidth - 1) / 2                   // Split evenly, 1 for divider
+	messageRightPanelWidth = contentWidth - messageLeftPanelWidth - 1 // Remainder goes to right panel
+	messageTextareaWidth   = messageRightPanelWidth - 4               // Panel padding(4)
+	messageTextareaHeight  = contentHeight - 8                        // Height for textarea minus headers and panel padding
 )
 
 func (m model) QueueMessageCreateSwitchPage(msg tea.Msg) (model, tea.Cmd) {

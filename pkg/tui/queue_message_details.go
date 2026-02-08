@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	detailsRightPanelWidth   = 74
+	detailsLeftPanelWidth    = (contentWidth - 1) / 2                    // Split evenly, 1 for divider
+	detailsRightPanelWidth   = contentWidth - detailsLeftPanelWidth - 1  // Remainder goes to right panel
 	detailsRightContentWidth = detailsRightPanelWidth - 4
 	detailsViewportHeight    = contentHeight - 3 // Account for header and margin
 )
@@ -69,7 +70,7 @@ func (m model) renderMessageDetails() string {
 	msg := m.state.queueMessageDetails.message
 
 	const (
-		leftPanelWidth   = 62
+		leftPanelWidth   = detailsLeftPanelWidth
 		leftContentWidth = leftPanelWidth - 4 // Account for padding (4)
 		labelWidth       = 16
 		valueWidth       = leftContentWidth - labelWidth - 2
