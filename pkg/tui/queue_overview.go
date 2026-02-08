@@ -1,10 +1,11 @@
 package tui
 
 import (
-	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,6 +20,9 @@ type queueOverviewState struct {
 	queues        []kue.Queue
 	table         table.Model
 	selectedItems map[int]bool // tracks which items are selected for bulk operations
+	filtering     bool
+	filterInput   textinput.Model
+	filterText    string
 }
 
 // Queue table column definitions.
@@ -66,7 +70,32 @@ func (m model) QueueOverviewSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	m.loading = true
 	m.loadingMsg = "Loading queues..."
 	m.state.queueOverview.selectedItems = make(map[int]bool)
+	m.state.queueOverview.filtering = false
+	m.state.queueOverview.filterText = ""
+	m.state.queueOverview.filterInput = initFilterInput()
 	return m, commands.LoadQueues(m.context, m.client)
+}
+
+func initFilterInput() textinput.Model {
+	ti := textinput.New()
+	ti.Placeholder = "Type to filter..."
+	ti.CharLimit = 50
+	ti.Width = 30
+	return ti
+}
+
+func (m model) getFilteredQueues() []kue.Queue {
+	if m.state.queueOverview.filterText == "" {
+		return m.state.queueOverview.queues
+	}
+	filter := strings.ToLower(m.state.queueOverview.filterText)
+	var filtered []kue.Queue
+	for _, q := range m.state.queueOverview.queues {
+		if strings.Contains(strings.ToLower(q.Name), filter) {
+			filtered = append(filtered, q)
+		}
+	}
+	return filtered
 }
 
 func (m model) NoQueuesFound() bool {
@@ -94,7 +123,8 @@ func initQueueOverviewTable(height int) table.Model {
 }
 
 func (m model) nextQueue() (model, tea.Cmd) {
-	if m.state.queueOverview.selected < len(m.state.queueOverview.queues)-1 {
+	filteredQueues := m.getFilteredQueues()
+	if m.state.queueOverview.selected < len(filteredQueues)-1 {
 		m.state.queueOverview.selected++
 	}
 	return m, nil
@@ -136,10 +166,38 @@ func (m model) getSelectedQueues() []kue.Queue {
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 
+	// Handle filter mode
+	if m.state.queueOverview.filtering {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.state.queueOverview.filtering = false
+				m.state.queueOverview.filterInput.Blur()
+				return m, nil
+			case tea.KeyEnter:
+				m.state.queueOverview.filtering = false
+				m.state.queueOverview.filterText = m.state.queueOverview.filterInput.Value()
+				m.state.queueOverview.filterInput.Blur()
+				m.state.queueOverview.selected = 0
+				return m, nil
+			}
+		}
+		m.state.queueOverview.filterInput, cmd = m.state.queueOverview.filterInput.Update(msg)
+		// Live filtering as user types
+		m.state.queueOverview.filterText = m.state.queueOverview.filterInput.Value()
+		m.state.queueOverview.selected = 0
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 
 	case tea.KeyMsg:
 		switch {
+		case key.Matches(msg, m.keys.Filter):
+			m.state.queueOverview.filtering = true
+			m.state.queueOverview.filterInput.Focus()
+			return m, textinput.Blink
 		case key.Matches(msg, m.keys.Down):
 			m, cmd = m.nextQueue()
 		case key.Matches(msg, m.keys.Up):
@@ -147,25 +205,34 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Select):
 			m, cmd = m.toggleQueueSelection()
 		case key.Matches(msg, m.keys.View):
-			if len(m.state.queueOverview.queues) > 0 {
+			filteredQueues := m.getFilteredQueues()
+			if len(filteredQueues) > 0 {
 				selected := m.state.queueOverview.selected
-				m.state.queueDetails.queue = m.state.queueOverview.queues[selected]
+				m.state.queueDetails.queue = filteredQueues[selected]
 				return m.QueueDetailsSwitchPage(msg)
 			}
 		case key.Matches(msg, m.keys.Create):
 			return m.QueueCreateSwitchPage(msg)
 		case key.Matches(msg, m.keys.Delete):
-			if len(m.state.queueOverview.queues) > 0 {
+			filteredQueues := m.getFilteredQueues()
+			if len(filteredQueues) > 0 {
 				// If items are selected, delete selected items; otherwise delete current item
 				if len(m.state.queueOverview.selectedItems) > 0 {
 					m.state.queueDelete.queues = m.getSelectedQueues()
 				} else {
 					selected := m.state.queueOverview.selected
-					m.state.queueDelete.queues = []kue.Queue{m.state.queueOverview.queues[selected]}
+					m.state.queueDelete.queues = []kue.Queue{filteredQueues[selected]}
 				}
 				return m.QueueDeleteSwitchPage(msg)
 			}
 		case key.Matches(msg, m.keys.Quit):
+			// If filtering, clear filter
+			if m.state.queueOverview.filterText != "" {
+				m.state.queueOverview.filterText = ""
+				m.state.queueOverview.filterInput.SetValue("")
+				m.state.queueOverview.selected = 0
+				return m, nil
+			}
 			// If items are selected, clear selection instead of quitting
 			if len(m.state.queueOverview.selectedItems) > 0 {
 				m.state.queueOverview.selectedItems = make(map[int]bool)
@@ -184,23 +251,16 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 
 func (m model) QueueOverviewView() string {
 	// Rebuild table rows to reflect current selection state
-	m = m.updateQueueOverviewTable()
+	m = m.updateQueueOverviewTableFiltered()
 	tableView := m.state.queueOverview.table.View()
 
-	if m.NoQueuesFound() {
+	filteredQueues := m.getFilteredQueues()
+	if len(filteredQueues) == 0 {
 		emptyMsg := lipgloss.NewStyle().
 			Foreground(styles.MediumGray).
 			Render("No queues found. Press Ctrl+N to create a new queue.")
 
 		return tableView + "\n\n" + emptyMsg
-	}
-
-	// Show selection count if items are selected
-	if len(m.state.queueOverview.selectedItems) > 0 {
-		selectionInfo := lipgloss.NewStyle().
-			Foreground(styles.AccentColor).
-			Render(fmt.Sprintf("%d queue(s) selected - press ctrl + d to delete", len(m.state.queueOverview.selectedItems)))
-		return tableView + "\n" + selectionInfo
 	}
 
 	return tableView

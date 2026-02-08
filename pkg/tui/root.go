@@ -44,14 +44,18 @@ func NewModel(
 
 		state: state{
 			queueOverview: queueOverviewState{
-				selected: 0,
-				table:    queueOverviewTable,
-				queues:   nil,
+				selected:      0,
+				table:         queueOverviewTable,
+				queues:        nil,
+				selectedItems: make(map[int]bool),
+				filterInput:   initFilterInput(),
 			},
 			queueDetails: queueDetailsState{
 				selected:        0,
 				messages:        nil,
 				attributesTable: "",
+				selectedItems:   make(map[int]bool),
+				filterInput:     initMessageFilterInput(),
 			},
 			queueDelete: queueDeleteState{
 				selected: 0,
@@ -218,7 +222,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	h := formatHeader(m.projectName, m.programName, views[m.page], m.awsInfo)
-	f := m.renderShortHelp()
+	f := m.renderFooter()
 	var c string
 
 	if m.loading {
@@ -260,6 +264,56 @@ func (m model) View() string {
 	}
 
 	return styles.ContentWrapper(m.width, m.height).Render(mainView)
+}
+
+func (m model) renderFooter() string {
+	// Show filter input when filtering
+	if m.page == queueOverview && m.state.queueOverview.filtering {
+		return m.renderFilterBar(m.state.queueOverview.filterInput.View())
+	}
+	if m.page == queueDetails && m.state.queueDetails.filtering {
+		return m.renderFilterBar(m.state.queueDetails.filterInput.View())
+	}
+
+	// Show filter status if filter is active
+	if m.page == queueOverview && m.state.queueOverview.filterText != "" {
+		return m.renderFilterStatus(m.state.queueOverview.filterText)
+	}
+	if m.page == queueDetails && m.state.queueDetails.filterText != "" {
+		return m.renderFilterStatus(m.state.queueDetails.filterText)
+	}
+
+	// Show selection info if items are selected
+	if m.page == queueOverview && len(m.state.queueOverview.selectedItems) > 0 {
+		return m.renderSelectionInfo(len(m.state.queueOverview.selectedItems), "queue")
+	}
+	if m.page == queueDetails && len(m.state.queueDetails.selectedItems) > 0 {
+		return m.renderSelectionInfo(len(m.state.queueDetails.selectedItems), "message")
+	}
+
+	return m.renderShortHelp()
+}
+
+func (m model) renderSelectionInfo(count int, itemType string) string {
+	selectionStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
+	helpStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
+	plural := "s"
+	if count == 1 {
+		plural = ""
+	}
+	return selectionStyle.Render(fmt.Sprintf("%d %s%s selected", count, itemType, plural)) +
+		helpStyle.Render("  (ctrl+d to delete, q to clear)")
+}
+
+func (m model) renderFilterBar(inputView string) string {
+	labelStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
+	return labelStyle.Render("Filter: ") + inputView + "  (enter to confirm, esc to cancel)"
+}
+
+func (m model) renderFilterStatus(filterText string) string {
+	filterStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
+	helpStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
+	return filterStyle.Render("Filter: "+filterText) + helpStyle.Render("  (q to clear)")
 }
 
 func (m model) renderShortHelp() string {
@@ -305,7 +359,7 @@ func (m model) renderHelpContent() string {
 		row("↓/j", "move down"),
 		row("←/h", "move left"),
 		row("→/l", "move right"),
-		row("enter", "view/select"),
+		row("enter", "view"),
 	)
 
 	actions := lipgloss.JoinVertical(lipgloss.Left,
@@ -401,6 +455,47 @@ func (m model) updateQueueOverviewTable() model {
 	return m
 }
 
+func (m model) updateQueueOverviewTableFiltered() model {
+	filteredQueues := m.getFilteredQueues()
+	var rows []table.Row
+	for _, queue := range filteredQueues {
+		queueType := "standard"
+		if queue.FifoQueue == "true" {
+			queueType = "fifo"
+		}
+		visibility := queue.VisibilityTimeout + "s"
+		retention := formatRetention(queue.MessageRetentionPeriod)
+
+		// Find original index to check selection
+		queueName := queue.Name
+		for origIdx, origQueue := range m.state.queueOverview.queues {
+			if origQueue.Url == queue.Url && m.state.queueOverview.selectedItems[origIdx] {
+				queueName = "● " + queue.Name
+				break
+			}
+		}
+
+		rows = append(rows, table.Row{
+			queueName,
+			queueType,
+			centerText(queue.ApproximateNumberOfMessages, 10),
+			centerText(queue.ApproximateNumberOfMessagesNotVisible, 10),
+			centerText(queue.ApproximateNumberOfMessagesDelayed, 10),
+			centerText(visibility, 10),
+			centerText(retention, 10),
+			queue.LastModified,
+		})
+	}
+
+	m.state.queueOverview.table.SetRows(rows)
+	if m.state.queueOverview.selected >= len(filteredQueues) {
+		m.state.queueOverview.selected = max(0, len(filteredQueues)-1)
+	}
+	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
+
+	return m
+}
+
 func (m model) updateMessagesTable() model {
 	var rows []table.Row
 	for i, message := range m.state.queueDetails.messages {
@@ -422,6 +517,37 @@ func (m model) updateMessagesTable() model {
 	m.state.queueDetails.messagesTable.SetRows(rows)
 	if m.state.queueDetails.selected >= len(m.state.queueDetails.messages) {
 		m.state.queueDetails.selected = max(0, len(m.state.queueDetails.messages)-1)
+	}
+	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
+
+	return m
+}
+
+func (m model) updateMessagesTableFiltered() model {
+	filteredMessages := m.getFilteredMessages()
+	var rows []table.Row
+	for _, message := range filteredMessages {
+		// Find original index to check selection
+		messageID := message.MessageID
+		for origIdx, origMsg := range m.state.queueDetails.messages {
+			if origMsg.MessageID == message.MessageID && m.state.queueDetails.selectedItems[origIdx] {
+				messageID = "● " + message.MessageID
+				break
+			}
+		}
+
+		rows = append(rows, table.Row{
+			messageID,
+			message.Body,
+			message.SentTimestamp,
+			fmt.Sprintf("%d", len(message.Body)),
+		})
+	}
+
+	m.state.queueDetails.messagesTable = initMessageDetailsTable(m.getMessageTableHeight())
+	m.state.queueDetails.messagesTable.SetRows(rows)
+	if m.state.queueDetails.selected >= len(filteredMessages) {
+		m.state.queueDetails.selected = max(0, len(filteredMessages)-1)
 	}
 	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
 
