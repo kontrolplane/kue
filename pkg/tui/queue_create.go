@@ -48,7 +48,7 @@ func newQueueCreateForm(input *queueCreateInput) *huh.Form {
 			huh.NewInput().
 				Title("Queue Name").
 				Description("Alphanumeric characters, hyphens, and underscores only (1-80 chars)").
-				Placeholder("my-queue-name").
+				Placeholder("queue-name").
 				Value(&input.name).
 				Validate(func(s string) error {
 					s = strings.TrimSpace(s)
