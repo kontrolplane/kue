@@ -1,0 +1,162 @@
+{
+  "queue": {
+    "name": "kontrolplane-logs"
+  },
+  "deadletter": {
+    "name": "kontrolplane-logs-deadletter",
+    "maxReceiveCount": "5"
+  },
+  "messages": [
+    {
+      "body": {
+        "logId": "log_f8a1b2",
+        "level": "info",
+        "service": "api-gateway",
+        "message": "POST /api/v1/orders returned 201 in 45ms",
+        "requestId": "req_7291830",
+        "traceId": "trace_abc123",
+        "timestamp": "2025-06-15T09:20:00Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_c3d4e5",
+        "level": "warn",
+        "service": "payment-service",
+        "message": "Stripe API response time exceeded threshold",
+        "latencyMs": 2847,
+        "thresholdMs": 2000,
+        "endpoint": "POST /v1/charges",
+        "timestamp": "2025-06-15T09:20:05Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_f6g7h8",
+        "level": "info",
+        "service": "email-service",
+        "message": "Email delivered successfully",
+        "emailId": "em_8210480221",
+        "recipient": "sarah.chen@example.com",
+        "template": "order_confirmation",
+        "timestamp": "2025-06-15T09:21:30Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_i9j0k1",
+        "level": "error",
+        "service": "inventory-service",
+        "message": "Connection pool exhausted: max 50 connections reached",
+        "activeConnections": 50,
+        "waitingRequests": 12,
+        "timestamp": "2025-06-15T11:30:00Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_l2m3n4",
+        "level": "info",
+        "service": "user-service",
+        "message": "User login successful",
+        "userId": "usr_41052",
+        "method": "oauth2_google",
+        "ipAddress": "10.0.1.87",
+        "timestamp": "2025-06-15T10:04:00Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_o5p6q7",
+        "level": "warn",
+        "service": "api-gateway",
+        "message": "Rate limit approaching for client",
+        "clientId": "client_ext_42",
+        "currentRate": 450,
+        "limitPerMinute": 500,
+        "timestamp": "2025-06-15T12:30:00Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_r8s9t0",
+        "level": "info",
+        "service": "shipment-service",
+        "message": "Carrier webhook received: package in transit",
+        "shipmentId": "ship_a01",
+        "carrier": "FedEx",
+        "trackingNumber": "FX927381024",
+        "timestamp": "2025-06-15T14:35:00Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_u1v2w3",
+        "level": "error",
+        "service": "notification-service",
+        "message": "Firebase push delivery failed: device token expired",
+        "notificationId": "notif_c05",
+        "userId": "usr_55029",
+        "deviceToken": "fcm_expired_abc",
+        "timestamp": "2025-06-15T15:12:00Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_x4y5z6",
+        "level": "info",
+        "service": "analytics-service",
+        "message": "Daily aggregation job completed",
+        "recordsProcessed": 284019,
+        "durationMs": 12340,
+        "date": "2025-06-14",
+        "timestamp": "2025-06-15T06:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_a7b8c9",
+        "level": "warn",
+        "service": "inventory-service",
+        "message": "Stock level below reorder threshold",
+        "productId": "prod_MC300",
+        "sku": "MC300-USB-C",
+        "currentStock": 3,
+        "reorderPoint": 10,
+        "timestamp": "2025-06-15T13:15:30Z"
+      }
+    }
+  ],
+  "deadletterMessages": [
+    {
+      "body": {
+        "logId": "log_dlq_01",
+        "level": "error",
+        "service": "unknown",
+        "rawPayload": "{malformed json}}",
+        "error": "JSON parse error: unexpected '}' at position 17",
+        "failedAt": "2025-06-14T03:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_dlq_02",
+        "level": "info",
+        "service": "legacy-import",
+        "message": "Batch import row processed",
+        "error": "Unregistered service: legacy-import is not in the service catalog",
+        "failedAt": "2025-06-14T08:15:00Z"
+      }
+    },
+    {
+      "body": {
+        "logId": "log_dlq_03",
+        "level": "error",
+        "service": "payment-service",
+        "message": "",
+        "error": "Empty message body: log message field is required",
+        "failedAt": "2025-06-14T14:45:00Z"
+      }
+    }
+  ]
+}

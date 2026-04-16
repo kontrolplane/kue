@@ -1,0 +1,133 @@
+{
+  "queue": {
+    "name": "kontrolplane-emails"
+  },
+  "deadletter": {
+    "name": "kontrolplane-emails-deadletter",
+    "maxReceiveCount": "3"
+  },
+  "messages": [
+    {
+      "body": {
+        "emailId": "em_8129034293",
+        "template": "welcome",
+        "recipient": "sarah.chen@example.com",
+        "subject": "Welcome to Kontrolplane",
+        "userId": "usr_20319",
+        "timestamp": "2025-06-15T08:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "emailId": "em_8210480221",
+        "template": "order_confirmation",
+        "recipient": "sarah.chen@example.com",
+        "subject": "Order #ord_7291830 confirmed",
+        "orderId": "ord_7291830",
+        "totalAmount": 103.99,
+        "timestamp": "2025-06-15T09:21:00Z"
+      }
+    },
+    {
+      "body": {
+        "emailId": "em_3301928374",
+        "template": "password_reset",
+        "recipient": "james.wu@example.com",
+        "subject": "Reset your password",
+        "userId": "usr_41052",
+        "expiresIn": "30m",
+        "timestamp": "2025-06-15T10:05:00Z"
+      }
+    },
+    {
+      "body": {
+        "emailId": "em_4412039485",
+        "template": "shipping_notification",
+        "recipient": "sarah.chen@example.com",
+        "subject": "Your order has shipped",
+        "orderId": "ord_7291830",
+        "trackingNumber": "FX927381024",
+        "carrier": "FedEx",
+        "timestamp": "2025-06-15T14:30:00Z"
+      }
+    },
+    {
+      "body": {
+        "emailId": "em_5523140596",
+        "template": "review_request",
+        "recipient": "mike.johnson@example.com",
+        "subject": "How was your recent purchase?",
+        "orderId": "ord_6182740",
+        "productName": "Mechanical Keyboard TKL",
+        "timestamp": "2025-06-15T15:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "emailId": "em_6634251607",
+        "template": "weekly_digest",
+        "recipient": "sarah.chen@example.com",
+        "subject": "Your weekly activity summary",
+        "userId": "usr_20319",
+        "period": "2025-06-08 to 2025-06-15",
+        "timestamp": "2025-06-15T18:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "emailId": "em_7745362718",
+        "template": "price_drop_alert",
+        "recipient": "james.wu@example.com",
+        "subject": "Price drop on Trail Runners X1",
+        "productId": "prod_TR100",
+        "oldPrice": 159.99,
+        "newPrice": 119.99,
+        "timestamp": "2025-06-15T19:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "emailId": "em_8856473829",
+        "template": "account_security",
+        "recipient": "alex.rivera@example.com",
+        "subject": "New login from Chrome on macOS",
+        "userId": "usr_33781",
+        "ipAddress": "192.168.1.42",
+        "location": "San Francisco, CA",
+        "timestamp": "2025-06-15T20:15:00Z"
+      }
+    }
+  ],
+  "deadletterMessages": [
+    {
+      "body": {
+        "emailId": "em_dlq_001",
+        "template": "order_confirmation",
+        "recipient": "invalid-address@",
+        "subject": "Order #ord_3847291 confirmed",
+        "error": "Invalid recipient: malformed email address",
+        "failedAt": "2025-06-14T11:45:00Z"
+      }
+    },
+    {
+      "body": {
+        "emailId": "em_dlq_002",
+        "template": "shipping_notification",
+        "recipient": "bounced@defunct-domain.example",
+        "subject": "Your order has shipped",
+        "error": "Hard bounce: domain does not exist",
+        "failedAt": "2025-06-14T16:20:00Z"
+      }
+    },
+    {
+      "body": {
+        "emailId": "em_dlq_003",
+        "template": "password_reset",
+        "recipient": "suppressed@example.com",
+        "subject": "Reset your password",
+        "error": "Recipient on suppression list: previous complaint",
+        "failedAt": "2025-06-14T22:00:00Z"
+      }
+    }
+  ]
+}

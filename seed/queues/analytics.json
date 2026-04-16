@@ -1,0 +1,148 @@
+{
+  "queue": {
+    "name": "kontrolplane-analytics"
+  },
+  "deadletter": {
+    "name": "kontrolplane-analytics-deadletter",
+    "maxReceiveCount": "5"
+  },
+  "messages": [
+    {
+      "body": {
+        "eventId": "evt_a1b2c3",
+        "eventType": "page_view",
+        "userId": "usr_20319",
+        "page": "/products/wireless-headphones-pro",
+        "referrer": "https://google.com/search?q=noise+cancelling+headphones",
+        "sessionId": "sess_8f3a1b",
+        "timestamp": "2025-06-15T09:12:00Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_d4e5f6",
+        "eventType": "add_to_cart",
+        "userId": "usr_20319",
+        "productId": "prod_WH200",
+        "productName": "Wireless Headphones Pro",
+        "quantity": 1,
+        "unitPrice": 129.99,
+        "sessionId": "sess_8f3a1b",
+        "timestamp": "2025-06-15T09:14:30Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_g7h8i9",
+        "eventType": "search_query",
+        "userId": "usr_41052",
+        "query": "running shoes size 10",
+        "resultsCount": 47,
+        "sessionId": "sess_2c7d4e",
+        "timestamp": "2025-06-15T09:15:00Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_j0k1l2",
+        "eventType": "checkout_started",
+        "userId": "usr_20319",
+        "cartTotal": 129.99,
+        "itemCount": 1,
+        "couponApplied": "SUMMER20",
+        "sessionId": "sess_8f3a1b",
+        "timestamp": "2025-06-15T09:18:00Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_m3n4o5",
+        "eventType": "purchase_completed",
+        "userId": "usr_20319",
+        "orderId": "ord_7291830",
+        "totalAmount": 103.99,
+        "paymentMethod": "credit_card",
+        "sessionId": "sess_8f3a1b",
+        "timestamp": "2025-06-15T09:20:00Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_p6q7r8",
+        "eventType": "page_view",
+        "userId": "usr_41052",
+        "page": "/products/trail-runners-x1",
+        "referrer": "/search?q=running+shoes",
+        "sessionId": "sess_2c7d4e",
+        "timestamp": "2025-06-15T09:22:00Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_s9t0u1",
+        "eventType": "product_review_submitted",
+        "userId": "usr_33781",
+        "productId": "prod_KB100",
+        "productName": "Mechanical Keyboard TKL",
+        "rating": 4,
+        "comment": "Great switches, keycaps could be better",
+        "sessionId": "sess_5f8a2b",
+        "timestamp": "2025-06-15T09:25:00Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_v2w3x4",
+        "eventType": "wishlist_add",
+        "userId": "usr_41052",
+        "productId": "prod_TR100",
+        "productName": "Trail Runners X1",
+        "sessionId": "sess_2c7d4e",
+        "timestamp": "2025-06-15T09:28:00Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_y5z6a7",
+        "eventType": "session_end",
+        "userId": "usr_33781",
+        "sessionId": "sess_5f8a2b",
+        "duration": 342,
+        "pagesViewed": 7,
+        "timestamp": "2025-06-15T09:30:00Z"
+      }
+    }
+  ],
+  "deadletterMessages": [
+    {
+      "body": {
+        "eventId": "evt_err_001",
+        "eventType": "purchase_completed",
+        "userId": "usr_90001",
+        "orderId": "ord_corrupt_01",
+        "error": "Malformed payload: missing totalAmount field",
+        "failedAt": "2025-06-14T22:30:00Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_err_002",
+        "eventType": "page_view",
+        "userId": null,
+        "page": "/admin/internal",
+        "error": "Schema validation failed: userId cannot be null",
+        "failedAt": "2025-06-14T23:10:00Z"
+      }
+    },
+    {
+      "body": {
+        "eventId": "evt_err_003",
+        "eventType": "add_to_cart",
+        "userId": "usr_00000",
+        "productId": "prod_DELETED",
+        "error": "Product not found: prod_DELETED was removed from catalog",
+        "failedAt": "2025-06-15T01:45:00Z"
+      }
+    }
+  ]
+}

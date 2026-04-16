@@ -8,6 +8,7 @@ const (
 	queueCreate
 	queueDelete
 	queueRedrive
+	queuePurge
 	queueMessageDetails
 	queueMessageCreate
 	queueMessageDelete
@@ -19,6 +20,7 @@ var views = map[page]string{
 	queueCreate:         "queue create",
 	queueDelete:         "queue delete",
 	queueRedrive:        "queue redrive",
+	queuePurge:          "queue purge",
 	queueMessageDetails: "queue message details",
 	queueMessageCreate:  "queue message create",
 	queueMessageDelete:  "queue message delete",

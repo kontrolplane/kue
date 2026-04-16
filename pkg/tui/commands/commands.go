@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kontrolplane/kue/pkg/kue"
@@ -121,4 +122,43 @@ func RefreshTick(d time.Duration, page string) tea.Cmd {
 // ScheduleRefresh creates a command to schedule the next refresh for a page.
 func ScheduleRefresh(page string) tea.Cmd {
 	return RefreshTick(RefreshInterval, page)
+}
+
+// StartRedrive creates a command to start a DLQ redrive task.
+func StartRedrive(ctx context.Context, client *sqs.Client, sourceArn string, destinationArn string) tea.Cmd {
+	return func() tea.Msg {
+		taskHandle, err := kue.StartMessageMoveTask(client, ctx, sourceArn, destinationArn)
+		return messages.QueueRedriveStartedMsg{TaskHandle: taskHandle, Err: err}
+	}
+}
+
+// ScheduleRedrivePoll creates a command that polls redrive status after a delay.
+func ScheduleRedrivePoll(d time.Duration, ctx context.Context, client *sqs.Client, sourceArn string) tea.Cmd {
+	return tea.Tick(d, func(t time.Time) tea.Msg {
+		tasks, err := kue.ListMessageMoveTasks(client, ctx, sourceArn)
+		return messages.QueueRedriveStatusMsg{Tasks: tasks, Err: err}
+	})
+}
+
+// PurgeQueue creates a command to purge all messages from a queue.
+func PurgeQueue(ctx context.Context, client *sqs.Client, queueUrl string) tea.Cmd {
+	return func() tea.Msg {
+		err := kue.PurgeQueue(client, ctx, queueUrl)
+		return messages.QueuePurgedMsg{Err: err}
+	}
+}
+
+// CopyToClipboard creates a command to copy text to the system clipboard.
+func CopyToClipboard(text string) tea.Cmd {
+	return func() tea.Msg {
+		err := clipboard.WriteAll(text)
+		return messages.ClipboardCopiedMsg{Err: err}
+	}
+}
+
+// ClearStatusAfter creates a command that sends a StatusClearMsg after the given duration.
+func ClearStatusAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(t time.Time) tea.Msg {
+		return messages.StatusClearMsg{}
+	})
 }

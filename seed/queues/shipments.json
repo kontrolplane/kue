@@ -1,0 +1,138 @@
+{
+  "queue": {
+    "name": "kontrolplane-shipments.fifo",
+    "attributes": {
+      "FifoQueue": "true",
+      "ContentBasedDeduplication": "true"
+    }
+  },
+  "deadletter": {
+    "name": "kontrolplane-shipments-deadletter.fifo",
+    "attributes": {
+      "FifoQueue": "true",
+      "ContentBasedDeduplication": "true"
+    },
+    "maxReceiveCount": "5"
+  },
+  "messages": [
+    {
+      "body": {
+        "shipmentId": "ship_a01",
+        "orderId": "ord_7291830",
+        "userId": "usr_20319",
+        "carrier": "FedEx",
+        "trackingNumber": "FX927381024",
+        "status": "in_transit",
+        "origin": "Warehouse East, Newark NJ",
+        "destination": "San Francisco, CA",
+        "estimatedDelivery": "2025-06-17",
+        "timestamp": "2025-06-15T14:30:00Z"
+      },
+      "messageGroupId": "ship-ord_7291830"
+    },
+    {
+      "body": {
+        "shipmentId": "ship_a02",
+        "orderId": "ord_6182740",
+        "userId": "usr_33781",
+        "carrier": "UPS",
+        "trackingNumber": "1Z999AA10123456784",
+        "status": "out_for_delivery",
+        "origin": "Warehouse East, Newark NJ",
+        "destination": "Brooklyn, NY",
+        "estimatedDelivery": "2025-06-15",
+        "timestamp": "2025-06-15T11:30:30Z"
+      },
+      "messageGroupId": "ship-ord_6182740"
+    },
+    {
+      "body": {
+        "shipmentId": "ship_a03",
+        "orderId": "ord_1523064",
+        "userId": "usr_20319",
+        "carrier": "USPS",
+        "trackingNumber": "9400111899223847201",
+        "status": "delivered",
+        "origin": "Warehouse West, Portland OR",
+        "destination": "San Francisco, CA",
+        "deliveredAt": "2025-06-14T16:00:00Z",
+        "timestamp": "2025-06-14T16:00:00Z"
+      },
+      "messageGroupId": "ship-ord_1523064"
+    },
+    {
+      "body": {
+        "shipmentId": "ship_a04",
+        "orderId": "ord_9412053",
+        "userId": "usr_55029",
+        "carrier": "FedEx",
+        "trackingNumber": "FX837492015",
+        "status": "label_created",
+        "origin": "Warehouse East, Newark NJ",
+        "destination": "Austin, TX",
+        "estimatedDelivery": "2025-06-18",
+        "timestamp": "2025-06-15T16:00:00Z"
+      },
+      "messageGroupId": "ship-ord_9412053"
+    },
+    {
+      "body": {
+        "shipmentId": "ship_a05",
+        "orderId": "ord_5102938",
+        "userId": "usr_67234",
+        "carrier": "UPS",
+        "trackingNumber": "1Z999BB20234567895",
+        "status": "return_in_transit",
+        "origin": "Chicago, IL",
+        "destination": "Returns Center, Newark NJ",
+        "timestamp": "2025-06-15T14:00:00Z"
+      },
+      "messageGroupId": "ship-ord_5102938"
+    },
+    {
+      "body": {
+        "shipmentId": "ship_a06",
+        "orderId": "ord_2634175",
+        "userId": "usr_78345",
+        "carrier": "FedEx",
+        "trackingNumber": "FX748293016",
+        "status": "label_created",
+        "origin": "Warehouse West, Portland OR",
+        "destination": "Seattle, WA",
+        "estimatedDelivery": "2025-06-17",
+        "timestamp": "2025-06-15T17:35:00Z"
+      },
+      "messageGroupId": "ship-ord_2634175"
+    }
+  ],
+  "deadletterMessages": [
+    {
+      "body": {
+        "shipmentId": "ship_dlq_01",
+        "orderId": "ord_dlq_006",
+        "userId": "usr_90001",
+        "carrier": "FedEx",
+        "trackingNumber": "FX000000000",
+        "status": "failed",
+        "error": "Address validation failed: zip code 00000 does not exist",
+        "failedAt": "2025-06-14T09:00:00Z"
+      },
+      "messageGroupId": "dlq-ship-01",
+      "messageDeduplicationId": "dlq-ship-dedup-01"
+    },
+    {
+      "body": {
+        "shipmentId": "ship_dlq_02",
+        "orderId": "ord_dlq_007",
+        "userId": "usr_82910",
+        "carrier": "DHL",
+        "trackingNumber": "DHL9283740192",
+        "status": "failed",
+        "error": "Carrier integration error: DHL API returned 503 Service Unavailable",
+        "failedAt": "2025-06-14T13:30:00Z"
+      },
+      "messageGroupId": "dlq-ship-02",
+      "messageDeduplicationId": "dlq-ship-dedup-02"
+    }
+  ]
+}

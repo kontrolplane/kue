@@ -1,0 +1,123 @@
+{
+  "queue": {
+    "name": "kontrolplane-users"
+  },
+  "deadletter": {
+    "name": "kontrolplane-users-deadletter",
+    "maxReceiveCount": "3"
+  },
+  "messages": [
+    {
+      "body": {
+        "userId": "usr_20319",
+        "action": "created",
+        "email": "sarah.chen@example.com",
+        "name": "Sarah Chen",
+        "plan": "pro",
+        "timestamp": "2025-06-15T08:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "userId": "usr_41052",
+        "action": "login",
+        "email": "james.wu@example.com",
+        "method": "oauth2_google",
+        "ipAddress": "10.0.1.87",
+        "timestamp": "2025-06-15T10:04:00Z"
+      }
+    },
+    {
+      "body": {
+        "userId": "usr_33781",
+        "action": "profile_updated",
+        "email": "mike.johnson@example.com",
+        "fields": ["displayName", "avatar"],
+        "timestamp": "2025-06-15T09:25:00Z"
+      }
+    },
+    {
+      "body": {
+        "userId": "usr_55029",
+        "action": "created",
+        "email": "emma.davis@example.com",
+        "name": "Emma Davis",
+        "plan": "free",
+        "timestamp": "2025-06-15T07:30:00Z"
+      }
+    },
+    {
+      "body": {
+        "userId": "usr_67234",
+        "action": "password_changed",
+        "email": "alex.martinez@example.com",
+        "method": "reset_link",
+        "timestamp": "2025-06-15T10:10:00Z"
+      }
+    },
+    {
+      "body": {
+        "userId": "usr_78345",
+        "action": "created",
+        "email": "lisa.wong@example.com",
+        "name": "Lisa Wong",
+        "plan": "pro",
+        "timestamp": "2025-06-15T17:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "userId": "usr_41052",
+        "action": "plan_upgraded",
+        "email": "james.wu@example.com",
+        "oldPlan": "free",
+        "newPlan": "pro",
+        "timestamp": "2025-06-15T14:15:00Z"
+      }
+    },
+    {
+      "body": {
+        "userId": "usr_20319",
+        "action": "address_added",
+        "email": "sarah.chen@example.com",
+        "addressType": "shipping",
+        "city": "San Francisco",
+        "state": "CA",
+        "timestamp": "2025-06-15T08:05:00Z"
+      }
+    }
+  ],
+  "deadletterMessages": [
+    {
+      "body": {
+        "userId": "usr_99999",
+        "action": "created",
+        "email": "duplicate@example.com",
+        "name": "Test User",
+        "error": "Unique constraint violation: email duplicate@example.com already exists",
+        "failedAt": "2025-06-14T11:55:00Z"
+      }
+    },
+    {
+      "body": {
+        "userId": "usr_88888",
+        "action": "profile_updated",
+        "email": "corrupted@example.com",
+        "fields": ["email"],
+        "error": "Validation failed: new email address has invalid format",
+        "failedAt": "2025-06-14T15:50:00Z"
+      }
+    },
+    {
+      "body": {
+        "userId": "usr_77777",
+        "action": "plan_upgraded",
+        "email": "billing-issue@example.com",
+        "oldPlan": "free",
+        "newPlan": "enterprise",
+        "error": "Billing service unavailable: connection refused on port 8443",
+        "failedAt": "2025-06-14T20:15:00Z"
+      }
+    }
+  ]
+}

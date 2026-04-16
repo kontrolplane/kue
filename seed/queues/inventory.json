@@ -1,0 +1,141 @@
+{
+  "queue": {
+    "name": "kontrolplane-inventory.fifo",
+    "attributes": {
+      "FifoQueue": "true",
+      "ContentBasedDeduplication": "true"
+    }
+  },
+  "deadletter": {
+    "name": "kontrolplane-inventory-deadletter.fifo",
+    "attributes": {
+      "FifoQueue": "true",
+      "ContentBasedDeduplication": "true"
+    },
+    "maxReceiveCount": "5"
+  },
+  "messages": [
+    {
+      "body": {
+        "inventoryId": "inv_a01",
+        "productId": "prod_WH200",
+        "sku": "WH200-BLK",
+        "warehouseId": "wh_east_01",
+        "action": "reserve",
+        "quantity": 1,
+        "orderId": "ord_7291830",
+        "timestamp": "2025-06-15T09:20:30Z"
+      },
+      "messageGroupId": "wh_east_01"
+    },
+    {
+      "body": {
+        "inventoryId": "inv_a02",
+        "productId": "prod_TR100",
+        "sku": "TR100-RED-10",
+        "warehouseId": "wh_west_01",
+        "action": "restock",
+        "quantity": 250,
+        "purchaseOrderId": "po_91827",
+        "timestamp": "2025-06-15T10:00:00Z"
+      },
+      "messageGroupId": "wh_west_01"
+    },
+    {
+      "body": {
+        "inventoryId": "inv_a03",
+        "productId": "prod_KB100",
+        "sku": "KB100-MX-BLU",
+        "warehouseId": "wh_east_01",
+        "action": "decrement",
+        "quantity": 3,
+        "reason": "order_fulfilled",
+        "orderId": "ord_6182740",
+        "timestamp": "2025-06-15T11:30:00Z"
+      },
+      "messageGroupId": "wh_east_01"
+    },
+    {
+      "body": {
+        "inventoryId": "inv_a04",
+        "productId": "prod_WH200",
+        "sku": "WH200-WHT",
+        "warehouseId": "wh_west_01",
+        "action": "transfer_out",
+        "quantity": 50,
+        "destinationWarehouse": "wh_east_01",
+        "timestamp": "2025-06-15T12:00:00Z"
+      },
+      "messageGroupId": "wh_west_01"
+    },
+    {
+      "body": {
+        "inventoryId": "inv_a05",
+        "productId": "prod_WH200",
+        "sku": "WH200-WHT",
+        "warehouseId": "wh_east_01",
+        "action": "transfer_in",
+        "quantity": 50,
+        "sourceWarehouse": "wh_west_01",
+        "timestamp": "2025-06-15T12:00:01Z"
+      },
+      "messageGroupId": "wh_east_01"
+    },
+    {
+      "body": {
+        "inventoryId": "inv_a06",
+        "productId": "prod_MC300",
+        "sku": "MC300-USB-C",
+        "warehouseId": "wh_east_01",
+        "action": "low_stock_alert",
+        "currentQuantity": 3,
+        "reorderThreshold": 10,
+        "timestamp": "2025-06-15T13:15:00Z"
+      },
+      "messageGroupId": "wh_east_01"
+    },
+    {
+      "body": {
+        "inventoryId": "inv_a07",
+        "productId": "prod_TR100",
+        "sku": "TR100-BLU-11",
+        "warehouseId": "wh_west_01",
+        "action": "reserve",
+        "quantity": 2,
+        "orderId": "ord_8301942",
+        "timestamp": "2025-06-15T14:20:00Z"
+      },
+      "messageGroupId": "wh_west_01"
+    }
+  ],
+  "deadletterMessages": [
+    {
+      "body": {
+        "inventoryId": "inv_dlq_01",
+        "productId": "prod_DISC_99",
+        "sku": "DISC99-XL",
+        "warehouseId": "wh_east_01",
+        "action": "decrement",
+        "quantity": 5,
+        "error": "Product discontinued: prod_DISC_99 no longer in catalog",
+        "failedAt": "2025-06-14T18:00:00Z"
+      },
+      "messageGroupId": "dlq-inv-01",
+      "messageDeduplicationId": "dlq-inv-dedup-01"
+    },
+    {
+      "body": {
+        "inventoryId": "inv_dlq_02",
+        "productId": "prod_KB100",
+        "sku": "KB100-MX-BRN",
+        "warehouseId": "wh_south_01",
+        "action": "restock",
+        "quantity": 100,
+        "error": "Unknown warehouse: wh_south_01 is not registered",
+        "failedAt": "2025-06-14T20:30:00Z"
+      },
+      "messageGroupId": "dlq-inv-02",
+      "messageDeduplicationId": "dlq-inv-dedup-02"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
@@ -179,6 +180,73 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			))
 		}
 
+	case messages.QueueRedriveStartedMsg:
+		m.loading = false
+		m.loadingMsg = ""
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error starting redrive: %v", msg.Err)
+			m.state.queueRedrive.inProgress = false
+		} else {
+			m.state.queueRedrive.taskHandle = msg.TaskHandle
+			m.state.queueRedrive.inProgress = true
+			cmds = append(cmds, commands.ScheduleRedrivePoll(
+				3*time.Second,
+				m.context,
+				m.client,
+				m.state.queueRedrive.queue.Arn,
+			))
+		}
+
+	case messages.QueueRedriveStatusMsg:
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error polling redrive status: %v", msg.Err)
+		} else {
+			m.state.queueRedrive.tasks = msg.Tasks
+			stillRunning := false
+			for _, task := range msg.Tasks {
+				if task.Status == "RUNNING" {
+					stillRunning = true
+					break
+				}
+			}
+			if stillRunning && m.page == queueRedrive {
+				cmds = append(cmds, commands.ScheduleRedrivePoll(
+					3*time.Second,
+					m.context,
+					m.client,
+					m.state.queueRedrive.queue.Arn,
+				))
+			}
+		}
+
+	case messages.QueuePurgedMsg:
+		m.loading = false
+		m.loadingMsg = ""
+		if msg.Err != nil {
+			m.error = fmt.Sprintf("Error purging queue: %v", msg.Err)
+		} else if m.state.queuePurge.fromOverview {
+			m = m.SwitchPage(queueOverview)
+			cmds = append(cmds, commands.LoadQueues(m.context, m.client))
+		} else {
+			queueUrl := m.state.queuePurge.queue.Url
+			m = m.SwitchPage(queueDetails)
+			cmds = append(cmds, tea.Batch(
+				commands.LoadQueueAttributes(m.context, m.client, queueUrl),
+				commands.LoadMessages(m.context, m.client, queueUrl, 10),
+			))
+		}
+
+	case messages.ClipboardCopiedMsg:
+		if msg.Err != nil {
+			m.statusMsg = "Failed to copy to clipboard"
+		} else {
+			m.statusMsg = "Copied to clipboard!"
+		}
+		cmds = append(cmds, commands.ClearStatusAfter(2*time.Second))
+
+	case messages.StatusClearMsg:
+		m.statusMsg = ""
+
 	case messages.RefreshTickMsg:
 		switch msg.Page {
 		case "queueOverview":
@@ -205,6 +273,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.QueueCreateUpdate(msg)
 	case queueDelete:
 		m, cmd = m.QueueDeleteUpdate(msg)
+	case queuePurge:
+		m, cmd = m.QueuePurgeUpdate(msg)
+	case queueRedrive:
+		m, cmd = m.QueueRedriveUpdate(msg)
 	case queueMessageDetails:
 		m, cmd = m.QueueMessageDetailsUpdate(msg)
 	case queueMessageDelete:
@@ -240,6 +312,10 @@ func (m model) View() string {
 			c = m.QueueCreateView()
 		case queueDelete:
 			c = m.QueueDeleteView()
+		case queuePurge:
+			c = m.QueuePurgeView()
+		case queueRedrive:
+			c = m.QueueRedriveView()
 		case queueMessageDetails:
 			c = m.QueueMessageDetailsView()
 		case queueMessageDelete:
@@ -267,6 +343,11 @@ func (m model) View() string {
 }
 
 func (m model) renderFooter() string {
+	if m.statusMsg != "" {
+		statusStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
+		return statusStyle.Render(m.statusMsg)
+	}
+
 	// Show filter input when filtering
 	if m.page == queueOverview && m.state.queueOverview.filtering {
 		return m.renderFilterBar(m.state.queueOverview.filterInput.View())
@@ -365,8 +446,11 @@ func (m model) renderHelpContent() string {
 	actions := lipgloss.JoinVertical(lipgloss.Left,
 		titleStyle.Render("Actions"),
 		row("space", "toggle select"),
+		row("c", "copy to clipboard"),
 		row("ctrl+n", "create new"),
 		row("ctrl+d", "delete"),
+		row("ctrl+p", "purge queue"),
+		row("ctrl+r", "redrive DLQ"),
 		row("/", "filter"),
 		row("q/esc", "back/quit"),
 		row("?", "toggle help"),

@@ -35,8 +35,9 @@ type model struct {
 	keys        keys.KeyMap
 	showHelp    bool
 	error       string
-	loading     bool
-	loadingMsg  string
+	loading    bool
+	loadingMsg string
+	statusMsg  string
 }
 
 // getTableHeight returns the height available for tables.
@@ -56,11 +57,13 @@ func (m model) getMessageTableHeight() int {
 }
 
 type state struct {
-	queueOverview         queueOverviewState
-	queueDetails          queueDetailsState
-	queueDelete           queueDeleteState
-	queueCreate           queueCreateState
-	queueMessageDetails   queueMessageDetailsState
-	queueMessageCreate    queueMessageCreateState
-	queueMessageDelete    queueMessageDeleteState
+	queueOverview       queueOverviewState
+	queueDetails        queueDetailsState
+	queueDelete         queueDeleteState
+	queueCreate         queueCreateState
+	queuePurge          queuePurgeState
+	queueRedrive        queueRedriveState
+	queueMessageDetails queueMessageDetailsState
+	queueMessageCreate  queueMessageCreateState
+	queueMessageDelete  queueMessageDeleteState
 }

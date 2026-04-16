@@ -213,6 +213,28 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.Create):
 			return m.QueueCreateSwitchPage(msg)
+		case key.Matches(msg, m.keys.Purge):
+			filteredQueues := m.getFilteredQueues()
+			if len(filteredQueues) > 0 {
+				selected := m.state.queueOverview.selected
+				m.state.queuePurge.queue = filteredQueues[selected]
+				m.state.queuePurge.fromOverview = true
+				return m.QueuePurgeSwitchPage(msg)
+			}
+		case key.Matches(msg, m.keys.Redrive):
+			filteredQueues := m.getFilteredQueues()
+			if len(filteredQueues) > 0 {
+				selected := m.state.queueOverview.selected
+				queue := filteredQueues[selected]
+				sourceArn := m.findSourceQueueArn(queue.Arn)
+				if sourceArn != "" {
+					m.state.queueRedrive.queue = queue
+					m.state.queueRedrive.destinationArn = sourceArn
+					m.state.queueRedrive.fromOverview = true
+					return m.QueueRedriveSwitchPage(msg)
+				}
+				m.error = "This queue is not a dead-letter queue"
+			}
 		case key.Matches(msg, m.keys.Delete):
 			filteredQueues := m.getFilteredQueues()
 			if len(filteredQueues) > 0 {

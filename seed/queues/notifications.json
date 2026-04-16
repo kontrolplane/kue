@@ -1,0 +1,133 @@
+{
+  "queue": {
+    "name": "kontrolplane-notifications"
+  },
+  "deadletter": {
+    "name": "kontrolplane-notifications-deadletter",
+    "maxReceiveCount": "3"
+  },
+  "messages": [
+    {
+      "body": {
+        "notificationId": "notif_a01",
+        "userId": "usr_20319",
+        "channel": "push",
+        "title": "Order shipped",
+        "message": "Your order #ord_7291830 is on its way",
+        "orderId": "ord_7291830",
+        "timestamp": "2025-06-15T14:30:00Z"
+      }
+    },
+    {
+      "body": {
+        "notificationId": "notif_a02",
+        "userId": "usr_41052",
+        "channel": "sms",
+        "phone": "+1-555-0142",
+        "message": "Your verification code is 847293. Expires in 10 minutes.",
+        "timestamp": "2025-06-15T10:05:00Z"
+      }
+    },
+    {
+      "body": {
+        "notificationId": "notif_a03",
+        "userId": "usr_33781",
+        "channel": "push",
+        "title": "Price drop alert",
+        "message": "Mechanical Keyboard TKL is now $89.99 (was $119.99)",
+        "productId": "prod_KB100",
+        "timestamp": "2025-06-15T11:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "notificationId": "notif_a04",
+        "userId": "usr_20319",
+        "channel": "in_app",
+        "title": "Review your purchase",
+        "message": "How are your Wireless Headphones Pro? Leave a review.",
+        "productId": "prod_WH200",
+        "timestamp": "2025-06-15T16:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "notificationId": "notif_a05",
+        "userId": "usr_55029",
+        "channel": "push",
+        "title": "Delivery arriving today",
+        "message": "Your package from FedEx will arrive by 5 PM",
+        "shipmentId": "ship_a03",
+        "timestamp": "2025-06-15T08:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "notificationId": "notif_a06",
+        "userId": "usr_41052",
+        "channel": "email",
+        "title": "New login detected",
+        "message": "We noticed a login from a new device in Portland, OR",
+        "ipAddress": "10.0.1.87",
+        "timestamp": "2025-06-15T10:04:30Z"
+      }
+    },
+    {
+      "body": {
+        "notificationId": "notif_a07",
+        "userId": "usr_67234",
+        "channel": "sms",
+        "phone": "+1-555-0198",
+        "message": "Your return for order #ord_5102938 has been approved",
+        "orderId": "ord_5102938",
+        "timestamp": "2025-06-15T13:45:00Z"
+      }
+    },
+    {
+      "body": {
+        "notificationId": "notif_a08",
+        "userId": "usr_20319",
+        "channel": "push",
+        "title": "Order delivered",
+        "message": "Your order #ord_7291830 was delivered. Left at front door.",
+        "orderId": "ord_7291830",
+        "timestamp": "2025-06-15T17:20:00Z"
+      }
+    }
+  ],
+  "deadletterMessages": [
+    {
+      "body": {
+        "notificationId": "notif_dlq_01",
+        "userId": "usr_55029",
+        "channel": "push",
+        "title": "Flash sale starts now",
+        "message": "50% off all accessories for the next 2 hours",
+        "error": "Device token expired: FCM returned NotRegistered",
+        "failedAt": "2025-06-14T12:00:00Z"
+      }
+    },
+    {
+      "body": {
+        "notificationId": "notif_dlq_02",
+        "userId": "usr_deleted_01",
+        "channel": "sms",
+        "phone": "+1-555-0000",
+        "message": "Your order has been confirmed",
+        "error": "User not found: usr_deleted_01 account was deactivated",
+        "failedAt": "2025-06-14T15:30:00Z"
+      }
+    },
+    {
+      "body": {
+        "notificationId": "notif_dlq_03",
+        "userId": "usr_67234",
+        "channel": "sms",
+        "phone": "+0-000-invalid",
+        "message": "Your verification code is 102938",
+        "error": "Invalid phone number: unable to route to carrier",
+        "failedAt": "2025-06-14T19:00:00Z"
+      }
+    }
+  ]
+}

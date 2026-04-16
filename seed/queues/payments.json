@@ -1,0 +1,164 @@
+{
+  "queue": {
+    "name": "kontrolplane-payments.fifo",
+    "attributes": {
+      "FifoQueue": "true",
+      "ContentBasedDeduplication": "true"
+    }
+  },
+  "deadletter": {
+    "name": "kontrolplane-payments-deadletter.fifo",
+    "attributes": {
+      "FifoQueue": "true",
+      "ContentBasedDeduplication": "true"
+    },
+    "maxReceiveCount": "5"
+  },
+  "messages": [
+    {
+      "body": {
+        "paymentId": "pay_8a7b6c5d",
+        "orderId": "ord_7291830",
+        "userId": "usr_20319",
+        "amount": 103.99,
+        "currency": "USD",
+        "method": "credit_card",
+        "cardLast4": "4242",
+        "status": "captured",
+        "timestamp": "2025-06-15T09:20:10Z"
+      },
+      "messageGroupId": "pay-ord_7291830"
+    },
+    {
+      "body": {
+        "paymentId": "pay_1f2e3d4c",
+        "orderId": "ord_6182740",
+        "userId": "usr_33781",
+        "amount": 119.99,
+        "currency": "USD",
+        "method": "paypal",
+        "paypalEmail": "mike.j@example.com",
+        "status": "captured",
+        "timestamp": "2025-06-15T11:30:05Z"
+      },
+      "messageGroupId": "pay-ord_6182740"
+    },
+    {
+      "body": {
+        "paymentId": "pay_9z8y7x6w",
+        "orderId": "ord_8301942",
+        "userId": "usr_41052",
+        "amount": 239.98,
+        "currency": "USD",
+        "method": "credit_card",
+        "cardLast4": "1881",
+        "status": "authorized",
+        "timestamp": "2025-06-15T14:20:05Z"
+      },
+      "messageGroupId": "pay-ord_8301942"
+    },
+    {
+      "body": {
+        "paymentId": "pay_3b4c5d6e",
+        "orderId": "ord_9412053",
+        "userId": "usr_55029",
+        "amount": 189.97,
+        "currency": "USD",
+        "method": "credit_card",
+        "cardLast4": "0073",
+        "status": "authorized",
+        "timestamp": "2025-06-15T15:45:05Z"
+      },
+      "messageGroupId": "pay-ord_9412053"
+    },
+    {
+      "body": {
+        "paymentId": "pay_5d6e7f8g",
+        "orderId": "ord_5102938",
+        "userId": "usr_67234",
+        "amount": 159.99,
+        "currency": "USD",
+        "method": "credit_card",
+        "cardLast4": "9102",
+        "status": "refund_initiated",
+        "refundReason": "Wrong size delivered",
+        "timestamp": "2025-06-15T13:45:00Z"
+      },
+      "messageGroupId": "pay-ord_5102938"
+    },
+    {
+      "body": {
+        "paymentId": "pay_7f8g9h0i",
+        "orderId": "ord_2634175",
+        "userId": "usr_78345",
+        "amount": 224.98,
+        "currency": "USD",
+        "method": "apple_pay",
+        "status": "captured",
+        "timestamp": "2025-06-15T17:30:05Z"
+      },
+      "messageGroupId": "pay-ord_2634175"
+    },
+    {
+      "body": {
+        "paymentId": "pay_2a3b4c5d",
+        "orderId": "ord_1523064",
+        "userId": "usr_20319",
+        "amount": 34.99,
+        "currency": "USD",
+        "method": "credit_card",
+        "cardLast4": "4242",
+        "status": "captured",
+        "timestamp": "2025-06-14T10:00:05Z"
+      },
+      "messageGroupId": "pay-ord_1523064"
+    }
+  ],
+  "deadletterMessages": [
+    {
+      "body": {
+        "paymentId": "pay_dlq_001",
+        "orderId": "ord_dlq_001",
+        "userId": "usr_90001",
+        "amount": 129.99,
+        "currency": "USD",
+        "method": "credit_card",
+        "cardLast4": "0000",
+        "error": "Card declined: insufficient funds",
+        "failedAt": "2025-06-14T11:40:30Z"
+      },
+      "messageGroupId": "dlq-pay-01",
+      "messageDeduplicationId": "dlq-pay-dedup-001"
+    },
+    {
+      "body": {
+        "paymentId": "pay_dlq_002",
+        "orderId": "ord_dlq_004",
+        "userId": "usr_82910",
+        "amount": 4999.99,
+        "currency": "USD",
+        "method": "credit_card",
+        "cardLast4": "3391",
+        "error": "Fraud detection: transaction flagged by risk engine",
+        "failedAt": "2025-06-14T16:10:00Z"
+      },
+      "messageGroupId": "dlq-pay-02",
+      "messageDeduplicationId": "dlq-pay-dedup-002"
+    },
+    {
+      "body": {
+        "paymentId": "pay_dlq_003",
+        "orderId": "ord_dlq_005",
+        "userId": "usr_41052",
+        "amount": 59.99,
+        "currency": "GBP",
+        "method": "credit_card",
+        "cardLast4": "7720",
+        "error": "Currency not supported: GBP is not enabled for this merchant",
+        "failedAt": "2025-06-14T21:30:00Z"
+      },
+      "messageGroupId": "dlq-pay-03",
+      "messageDeduplicationId": "dlq-pay-dedup-003"
+    }
+  ]
+}

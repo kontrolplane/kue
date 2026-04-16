@@ -302,6 +302,23 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 					return m.QueueMessageDeleteSwitchPage(msg)
 				}
 			}
+		case key.Matches(msg, m.keys.CopyToClipboard):
+			if m.state.queueDetails.queue.Arn != "" {
+				return m, commands.CopyToClipboard(m.state.queueDetails.queue.Arn)
+			}
+		case key.Matches(msg, m.keys.Purge):
+			m.state.queuePurge.queue = m.state.queueDetails.queue
+			m.state.queuePurge.fromOverview = false
+			return m.QueuePurgeSwitchPage(msg)
+		case key.Matches(msg, m.keys.Redrive):
+			sourceArn := m.findSourceQueueArn(m.state.queueDetails.queue.Arn)
+			if sourceArn != "" {
+				m.state.queueRedrive.queue = m.state.queueDetails.queue
+				m.state.queueRedrive.destinationArn = sourceArn
+				m.state.queueRedrive.fromOverview = false
+				return m.QueueRedriveSwitchPage(msg)
+			}
+			m.error = "This queue is not a dead-letter queue"
 		case key.Matches(msg, m.keys.Create):
 			m.state.queueMessageCreate.queueName = m.state.queueDetails.queue.Name
 			m.state.queueMessageCreate.queueUrl = m.state.queueDetails.queue.Url

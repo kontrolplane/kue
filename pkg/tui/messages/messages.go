@@ -54,3 +54,28 @@ type LoadingMsg struct {
 	Loading bool
 	Message string
 }
+
+// QueueRedriveStartedMsg is sent when a DLQ redrive task has been started.
+type QueueRedriveStartedMsg struct {
+	TaskHandle string
+	Err        error
+}
+
+// QueueRedriveStatusMsg is sent when the redrive task status has been polled.
+type QueueRedriveStatusMsg struct {
+	Tasks []kue.MessageMoveTaskStatus
+	Err   error
+}
+
+// QueuePurgedMsg is sent when a queue has been purged.
+type QueuePurgedMsg struct {
+	Err error
+}
+
+// ClipboardCopiedMsg is sent after a clipboard copy operation completes.
+type ClipboardCopiedMsg struct {
+	Err error
+}
+
+// StatusClearMsg is sent to clear the transient status message.
+type StatusClearMsg struct{}

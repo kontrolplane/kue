@@ -15,8 +15,11 @@ type KeyMap struct {
 	Filter        key.Binding
 	Create        key.Binding
 	Delete        key.Binding
-	DeleteMessage key.Binding
-	Quit          key.Binding
+	DeleteMessage   key.Binding
+	CopyToClipboard key.Binding
+	Purge           key.Binding
+	Redrive         key.Binding
+	Quit            key.Binding
 }
 
 // ShortHelp returns keybindings to be shown in the mini help view. It's part
@@ -43,6 +46,9 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Create,
 			k.Delete,
 			k.DeleteMessage,
+			k.CopyToClipboard,
+			k.Purge,
+			k.Redrive,
 			k.Quit,
 		},
 	}
@@ -92,6 +98,18 @@ var Keys = KeyMap{
 	DeleteMessage: key.NewBinding(
 		key.WithKeys("ctrl+d"),
 		key.WithHelp("ctrl+d", "delete message"),
+	),
+	CopyToClipboard: key.NewBinding(
+		key.WithKeys("c"),
+		key.WithHelp("c", "copy"),
+	),
+	Purge: key.NewBinding(
+		key.WithKeys("ctrl+p"),
+		key.WithHelp("ctrl+p", "purge"),
+	),
+	Redrive: key.NewBinding(
+		key.WithKeys("ctrl+r"),
+		key.WithHelp("ctrl+r", "redrive"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "esc", "ctrl+c"),

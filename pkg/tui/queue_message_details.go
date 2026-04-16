@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -9,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
@@ -28,12 +30,24 @@ type queueMessageDetailsState struct {
 	viewport  viewport.Model
 }
 
+func formatMessageBody(body string) string {
+	var raw json.RawMessage
+	if err := json.Unmarshal([]byte(body), &raw); err != nil {
+		return body
+	}
+	pretty, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return body
+	}
+	return string(pretty)
+}
+
 func (m model) QueueMessageDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	m.error = ""
 
 	// Initialize viewport for message body
 	vp := viewport.New(detailsRightContentWidth, detailsViewportHeight)
-	vp.SetContent(m.state.queueMessageDetails.message.Body)
+	vp.SetContent(formatMessageBody(m.state.queueMessageDetails.message.Body))
 	m.state.queueMessageDetails.viewport = vp
 
 	return m.SwitchPage(queueMessageDetails), nil
@@ -45,6 +59,8 @@ func (m model) QueueMessageDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
+		case key.Matches(msg, m.keys.CopyToClipboard):
+			return m, commands.CopyToClipboard(m.state.queueMessageDetails.message.Body)
 		case key.Matches(msg, m.keys.DeleteMessage):
 			if m.state.queueMessageDetails.message.ReceiptHandle != "" {
 				m.state.queueMessageDelete.message = m.state.queueMessageDetails.message
