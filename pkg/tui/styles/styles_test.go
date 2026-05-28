@@ -40,9 +40,13 @@ func TestFormThemeDoesNotPanic(t *testing.T) {
 		}
 	}()
 
-	theme := FormTheme()
-	if theme == nil {
+	themeFunc := FormTheme()
+	if themeFunc == nil {
 		t.Error("FormTheme() should not return nil")
+	}
+	styles := themeFunc(true)
+	if styles == nil {
+		t.Error("FormTheme()(true) should not return nil")
 	}
 }
 

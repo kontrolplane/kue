@@ -14,7 +14,7 @@ const (
 	headerHeight          = 3   // Height of the header section
 	footerPadding         = 4   // Padding for footer/help area
 	borderPadding         = 2   // Border adds 2 chars (left + right or top + bottom)
-	attributesTableHeight = 8   // Reserved height for attributes table in details view
+	attributesPanelHeight = 7   // Reserved height for attributes panel in details view
 	minTableHeight        = 5   // Minimum height for any table
 	defaultTableHeight    = 10  // Default table height when window size unknown
 	contentWidth          = 140 // Fixed width for content area
@@ -48,8 +48,8 @@ func (m model) getTableHeight() int {
 
 // getMessageTableHeight returns the height for the messages table in details view.
 func (m model) getMessageTableHeight() int {
-	// Content height minus attributes table area
-	available := contentHeight - attributesTableHeight - 3
+	// Content height minus attributes panel and separator
+	available := contentHeight - attributesPanelHeight - 2
 	if available < minTableHeight {
 		return minTableHeight
 	}

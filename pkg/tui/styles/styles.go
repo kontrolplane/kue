@@ -2,9 +2,9 @@
 package styles
 
 import (
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/table"
+	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // Color palette
@@ -95,32 +95,34 @@ func AttributesTableStyles() table.Styles {
 }
 
 // FormTheme returns the huh form theme with brand colors.
-func FormTheme() *huh.Theme {
-	t := huh.ThemeBase()
+func FormTheme() huh.ThemeFunc {
+	return func(isDark bool) *huh.Styles {
+		t := huh.ThemeBase(isDark)
 
-	// Focused field styles
-	t.Focused.Title = t.Focused.Title.Foreground(AccentColor).Bold(true)
-	t.Focused.Description = t.Focused.Description.Foreground(LightGray)
-	t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(AccentColor)
-	t.Focused.UnselectedOption = t.Focused.UnselectedOption.Foreground(LightGray)
-	t.Focused.FocusedButton = t.Focused.FocusedButton.Background(AccentColor).Foreground(TextWhite)
-	t.Focused.BlurredButton = t.Focused.BlurredButton.Background(DarkGray).Foreground(NearWhite)
-	t.Focused.TextInput.Cursor = t.Focused.TextInput.Cursor.Foreground(AccentColor)
-	t.Focused.TextInput.Placeholder = t.Focused.TextInput.Placeholder.Foreground(MediumGray)
-	t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(AccentColor)
-	t.Focused.NextIndicator = t.Focused.NextIndicator.Foreground(AccentColor)
-	t.Focused.PrevIndicator = t.Focused.PrevIndicator.Foreground(AccentColor)
+		// Focused field styles
+		t.Focused.Title = t.Focused.Title.Foreground(AccentColor).Bold(true)
+		t.Focused.Description = t.Focused.Description.Foreground(LightGray)
+		t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(AccentColor)
+		t.Focused.UnselectedOption = t.Focused.UnselectedOption.Foreground(LightGray)
+		t.Focused.FocusedButton = t.Focused.FocusedButton.Background(AccentColor).Foreground(TextWhite)
+		t.Focused.BlurredButton = t.Focused.BlurredButton.Background(DarkGray).Foreground(NearWhite)
+		t.Focused.TextInput.Cursor = t.Focused.TextInput.Cursor.Foreground(AccentColor)
+		t.Focused.TextInput.Placeholder = t.Focused.TextInput.Placeholder.Foreground(MediumGray)
+		t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(AccentColor)
+		t.Focused.NextIndicator = t.Focused.NextIndicator.Foreground(AccentColor)
+		t.Focused.PrevIndicator = t.Focused.PrevIndicator.Foreground(AccentColor)
 
-	// Blurred field styles
-	t.Blurred.Title = t.Blurred.Title.Foreground(MediumGray)
-	t.Blurred.Description = t.Blurred.Description.Foreground(DarkGray)
-	t.Blurred.TextInput.Text = t.Blurred.TextInput.Text.Foreground(LightGray)
+		// Blurred field styles
+		t.Blurred.Title = t.Blurred.Title.Foreground(MediumGray)
+		t.Blurred.Description = t.Blurred.Description.Foreground(DarkGray)
+		t.Blurred.TextInput.Text = t.Blurred.TextInput.Text.Foreground(LightGray)
 
-	// Group title style (section headers)
-	t.Focused.Base = t.Focused.Base.BorderForeground(BorderColor)
-	t.Blurred.Base = t.Blurred.Base.BorderForeground(BorderColor)
+		// Group title style (section headers)
+		t.Focused.Base = t.Focused.Base.BorderForeground(BorderColor)
+		t.Blurred.Base = t.Blurred.Base.BorderForeground(BorderColor)
 
-	return t
+		return t
+	}
 }
 
 // FormSectionHeader returns a styled section header for forms.

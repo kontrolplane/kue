@@ -3,11 +3,11 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
@@ -142,18 +142,7 @@ func (m model) QueueMessageCreateView() string {
 
 	leftPanel := leftPanelStyle.Render(leftPanelInner)
 
-	// Vertical divider - create full height line
-	var dividerLines string
-	for i := 0; i < contentHeight; i++ {
-		dividerLines += "│"
-		if i < contentHeight-1 {
-			dividerLines += "\n"
-		}
-	}
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(styles.BorderColor)
-
-	divider := dividerStyle.Render(dividerLines)
+	divider := renderVerticalDivider(contentHeight)
 
 	// Right panel - message body textarea
 	bodyHeaderStyle := lipgloss.NewStyle().
@@ -191,13 +180,13 @@ func (m model) QueueMessageCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m.QueueDetailsGoBack(msg)
 
-		case msg.Type == tea.KeyTab || msg.Type == tea.KeyShiftTab:
-			if msg.Type == tea.KeyShiftTab {
+		case msg.Code == tea.KeyTab:
+			if msg.Mod.Contains(tea.ModShift) {
 				m.state.queueMessageCreate.selected--
 				if m.state.queueMessageCreate.selected < 0 {
 					m.state.queueMessageCreate.selected = 2

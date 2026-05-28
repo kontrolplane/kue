@@ -4,19 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	kue "github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
 const (
-	detailsLeftPanelWidth    = (contentWidth - 1) / 2                    // Split evenly, 1 for divider
-	detailsRightPanelWidth   = contentWidth - detailsLeftPanelWidth - 1  // Remainder goes to right panel
+	detailsLeftPanelWidth    = (contentWidth - 1) / 2                   // Split evenly, 1 for divider
+	detailsRightPanelWidth   = contentWidth - detailsLeftPanelWidth - 1 // Remainder goes to right panel
 	detailsRightContentWidth = detailsRightPanelWidth - 4
 	detailsViewportHeight    = contentHeight - 3 // Account for header and margin
 )
@@ -46,7 +46,7 @@ func (m model) QueueMessageDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	m.error = ""
 
 	// Initialize viewport for message body
-	vp := viewport.New(detailsRightContentWidth, detailsViewportHeight)
+	vp := viewport.New(viewport.WithWidth(detailsRightContentWidth), viewport.WithHeight(detailsViewportHeight))
 	vp.SetContent(formatMessageBody(m.state.queueMessageDetails.message.Body))
 	m.state.queueMessageDetails.viewport = vp
 
@@ -57,13 +57,13 @@ func (m model) QueueMessageDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.CopyToClipboard):
 			return m, commands.CopyToClipboard(m.state.queueMessageDetails.message.Body)
-		case key.Matches(msg, m.keys.DeleteMessage):
+		case key.Matches(msg, m.keys.Delete):
 			if m.state.queueMessageDetails.message.ReceiptHandle != "" {
-				m.state.queueMessageDelete.message = m.state.queueMessageDetails.message
+				m.state.queueMessageDelete.messages = []kue.Message{m.state.queueMessageDetails.message}
 				m.state.queueMessageDelete.queueUrl = m.state.queueMessageDetails.queueUrl
 				m.state.queueMessageDelete.queueName = m.state.queueMessageDetails.queueName
 				return m.QueueMessageDeleteSwitchPage(msg)
@@ -182,18 +182,7 @@ func (m model) renderMessageDetails() string {
 
 	leftPanel := leftPanelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, leftSections...))
 
-	// Vertical divider - create full height line
-	var dividerLines string
-	for i := 0; i < contentHeight; i++ {
-		dividerLines += "│"
-		if i < contentHeight-1 {
-			dividerLines += "\n"
-		}
-	}
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(styles.BorderColor)
-
-	divider := dividerStyle.Render(dividerLines)
+	divider := renderVerticalDivider(contentHeight)
 
 	// Right panel - message body with viewport
 	bodyHeaderStyle := lipgloss.NewStyle().

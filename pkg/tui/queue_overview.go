@@ -1,14 +1,11 @@
 package tui
 
 import (
-	"strings"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/table"
+	"charm.land/lipgloss/v2"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
-
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	kue "github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
@@ -20,48 +17,34 @@ type queueOverviewState struct {
 	queues        []kue.Queue
 	table         table.Model
 	selectedItems map[int]bool // tracks which items are selected for bulk operations
-	filtering     bool
-	filterInput   textinput.Model
-	filterText    string
+	filter        filterModel
 }
 
-// Queue table column definitions.
-var columnMap = map[int]string{
-	0: "queue name",
-	1: "type",
-	2: "available",
-	3: "not visible",
-	4: "delayed",
-	5: "visibility",
-	6: "retention",
-	7: "last updated",
-}
+func queueOverviewColumns() []table.Column {
+	const (
+		numColumns       = 8
+		cellPadding      = numColumns * 2 // bubbles table adds 1 char padding on each side per cell
+		typeWidth        = 9
+		availableWidth   = 10
+		notVisibleWidth  = 12
+		delayedWidth     = 9
+		visibilityWidth  = 10
+		retentionWidth   = 10
+		lastUpdatedWidth = 24
+	)
+	fixedWidth := typeWidth + availableWidth + notVisibleWidth + delayedWidth + visibilityWidth + retentionWidth + lastUpdatedWidth
+	nameWidth := contentWidth - fixedWidth - cellPadding
 
-var queueOverviewColumns []table.Column = []table.Column{
-	{
-		Title: columnMap[0], Width: 40,
-	},
-	{
-		Title: columnMap[1], Width: 10,
-	},
-	{
-		Title: columnMap[2], Width: 10,
-	},
-	{
-		Title: columnMap[3], Width: 10,
-	},
-	{
-		Title: columnMap[4], Width: 10,
-	},
-	{
-		Title: columnMap[5], Width: 10,
-	},
-	{
-		Title: columnMap[6], Width: 10,
-	},
-	{
-		Title: columnMap[7], Width: 20,
-	},
+	return []table.Column{
+		{Title: "Queue Name", Width: nameWidth},
+		{Title: "Type", Width: typeWidth},
+		{Title: "Available", Width: availableWidth},
+		{Title: "Not Visible", Width: notVisibleWidth},
+		{Title: "Delayed", Width: delayedWidth},
+		{Title: "Visibility", Width: visibilityWidth},
+		{Title: "Retention", Width: retentionWidth},
+		{Title: "Last Updated", Width: lastUpdatedWidth},
+	}
 }
 
 func (m model) QueueOverviewSwitchPage(msg tea.Msg) (model, tea.Cmd) {
@@ -70,28 +53,34 @@ func (m model) QueueOverviewSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	m.loading = true
 	m.loadingMsg = "Loading queues..."
 	m.state.queueOverview.selectedItems = make(map[int]bool)
-	m.state.queueOverview.filtering = false
-	m.state.queueOverview.filterText = ""
-	m.state.queueOverview.filterInput = initFilterInput()
+	m.state.queueOverview.filter = newFilter("Type to filter...")
 	return m, commands.LoadQueues(m.context, m.client)
 }
 
-func initFilterInput() textinput.Model {
-	ti := textinput.New()
-	ti.Placeholder = "Type to filter..."
-	ti.CharLimit = 50
-	ti.Width = 30
-	return ti
+func initQueueOverviewTable(height int) table.Model {
+	if height < minTableHeight {
+		height = minTableHeight
+	}
+
+	t := table.New(
+		table.WithColumns(queueOverviewColumns()),
+		table.WithFocused(true),
+		table.WithWidth(contentWidth),
+		table.WithHeight(height),
+	)
+
+	t.SetStyles(styles.TableStyles())
+
+	return t
 }
 
 func (m model) getFilteredQueues() []kue.Queue {
-	if m.state.queueOverview.filterText == "" {
+	if m.state.queueOverview.filter.text == "" {
 		return m.state.queueOverview.queues
 	}
-	filter := strings.ToLower(m.state.queueOverview.filterText)
 	var filtered []kue.Queue
 	for _, q := range m.state.queueOverview.queues {
-		if strings.Contains(strings.ToLower(q.Name), filter) {
+		if m.state.queueOverview.filter.Matches(q.Name) {
 			filtered = append(filtered, q)
 		}
 	}
@@ -106,40 +95,24 @@ func (m model) QueuesCount() int {
 	return len(m.state.queueOverview.queues)
 }
 
-func initQueueOverviewTable(height int) table.Model {
-	if height < minTableHeight {
-		height = minTableHeight
-	}
-
-	t := table.New(
-		table.WithColumns(queueOverviewColumns),
-		table.WithFocused(true),
-		table.WithHeight(height),
-	)
-
-	t.SetStyles(styles.TableStyles())
-
-	return t
-}
-
-func (m model) nextQueue() (model, tea.Cmd) {
+func (m model) nextQueue() model {
 	filteredQueues := m.getFilteredQueues()
 	if m.state.queueOverview.selected < len(filteredQueues)-1 {
 		m.state.queueOverview.selected++
 	}
-	return m, nil
+	return m
 }
 
-func (m model) previousQueue() (model, tea.Cmd) {
+func (m model) previousQueue() model {
 	if m.state.queueOverview.selected > 0 {
 		m.state.queueOverview.selected--
 	}
-	return m, nil
+	return m
 }
 
-func (m model) toggleQueueSelection() (model, tea.Cmd) {
+func (m model) toggleQueueSelection() model {
 	if len(m.state.queueOverview.queues) == 0 {
-		return m, nil
+		return m
 	}
 	idx := m.state.queueOverview.selected
 	if m.state.queueOverview.selectedItems == nil {
@@ -150,7 +123,7 @@ func (m model) toggleQueueSelection() (model, tea.Cmd) {
 	} else {
 		m.state.queueOverview.selectedItems[idx] = true
 	}
-	return m, nil
+	return m
 }
 
 func (m model) getSelectedQueues() []kue.Queue {
@@ -164,46 +137,31 @@ func (m model) getSelectedQueues() []kue.Queue {
 }
 
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	// Handle filter mode
-	if m.state.queueOverview.filtering {
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			switch msg.Type {
-			case tea.KeyEsc:
-				m.state.queueOverview.filtering = false
-				m.state.queueOverview.filterInput.Blur()
-				return m, nil
-			case tea.KeyEnter:
-				m.state.queueOverview.filtering = false
-				m.state.queueOverview.filterText = m.state.queueOverview.filterInput.Value()
-				m.state.queueOverview.filterInput.Blur()
-				m.state.queueOverview.selected = 0
-				return m, nil
-			}
-		}
-		m.state.queueOverview.filterInput, cmd = m.state.queueOverview.filterInput.Update(msg)
-		// Live filtering as user types
-		m.state.queueOverview.filterText = m.state.queueOverview.filterInput.Value()
+	// Handle filter mode - delegate to filter model
+	if m.state.queueOverview.filter.active {
+		var cmd tea.Cmd
+		m.state.queueOverview.filter, cmd = m.state.queueOverview.filter.Update(msg)
 		m.state.queueOverview.selected = 0
+		m = m.rebuildQueueTable()
 		return m, cmd
 	}
 
 	switch msg := msg.(type) {
-
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.Filter):
-			m.state.queueOverview.filtering = true
-			m.state.queueOverview.filterInput.Focus()
-			return m, textinput.Blink
+			var cmd tea.Cmd
+			m.state.queueOverview.filter, cmd = m.state.queueOverview.filter.Activate()
+			return m, cmd
 		case key.Matches(msg, m.keys.Down):
-			m, cmd = m.nextQueue()
+			m = m.nextQueue()
+			m = m.rebuildQueueTable()
 		case key.Matches(msg, m.keys.Up):
-			m, cmd = m.previousQueue()
+			m = m.previousQueue()
+			m = m.rebuildQueueTable()
 		case key.Matches(msg, m.keys.Select):
-			m, cmd = m.toggleQueueSelection()
+			m = m.toggleQueueSelection()
+			m = m.rebuildQueueTable()
 		case key.Matches(msg, m.keys.View):
 			filteredQueues := m.getFilteredQueues()
 			if len(filteredQueues) > 0 {
@@ -249,40 +207,62 @@ func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.Quit):
 			// If filtering, clear filter
-			if m.state.queueOverview.filterText != "" {
-				m.state.queueOverview.filterText = ""
-				m.state.queueOverview.filterInput.SetValue("")
+			if m.state.queueOverview.filter.text != "" {
+				m.state.queueOverview.filter = m.state.queueOverview.filter.Clear()
 				m.state.queueOverview.selected = 0
+				m = m.rebuildQueueTable()
 				return m, nil
 			}
 			// If items are selected, clear selection instead of quitting
 			if len(m.state.queueOverview.selectedItems) > 0 {
 				m.state.queueOverview.selectedItems = make(map[int]bool)
+				m = m.rebuildQueueTable()
 				return m, nil
 			}
 			return m, tea.Quit
 		default:
+			var cmd tea.Cmd
 			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+			return m, cmd
 		}
 	default:
+		var cmd tea.Cmd
 		m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+		return m, cmd
 	}
 
-	return m, cmd
+	return m, nil
 }
 
 func (m model) QueueOverviewView() string {
-	// Rebuild table rows to reflect current selection state
-	m = m.updateQueueOverviewTableFiltered()
+	filteredQueues := m.getFilteredQueues()
+
+	if len(m.state.queueOverview.queues) == 0 {
+		emptyStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
+		hintStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
+
+		emptyMsg := lipgloss.JoinVertical(lipgloss.Center,
+			emptyStyle.Render("No queues found"),
+			"",
+			emptyStyle.Render("Press ")+hintStyle.Render("Ctrl+N")+emptyStyle.Render(" to create a new queue"),
+		)
+
+		return lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, emptyMsg)
+	}
+
 	tableView := m.state.queueOverview.table.View()
 
-	filteredQueues := m.getFilteredQueues()
 	if len(filteredQueues) == 0 {
-		emptyMsg := lipgloss.NewStyle().
-			Foreground(styles.MediumGray).
-			Render("No queues found. Press Ctrl+N to create a new queue.")
+		emptyStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
+		hintStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
 
-		return tableView + "\n\n" + emptyMsg
+		emptyMsg := lipgloss.JoinVertical(lipgloss.Center,
+			emptyStyle.Render("No queues match your filter"),
+			"",
+			emptyStyle.Render("Press ")+hintStyle.Render("q")+emptyStyle.Render(" to clear the filter"),
+		)
+
+		return lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, emptyMsg)
 	}
 
 	return tableView

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	kue "github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
@@ -43,21 +43,6 @@ func (m model) queuePurgeMessageCount() int {
 }
 
 func (m model) QueuePurgeView() string {
-	queueDisplay := styles.Bold.Render(m.state.queuePurge.queue.Name)
-
-	confirm := "yes"
-	abort := "no"
-
-	if m.state.queuePurge.selected == 0 {
-		abort = styles.ButtonSecondary.Render(abort)
-		confirm = styles.ButtonPrimary.Render(confirm)
-	} else {
-		abort = styles.ButtonPrimary.Render(abort)
-		confirm = styles.ButtonSecondary.Render(confirm)
-	}
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, abort, "    ", confirm)
-
 	var prompt string
 	if m.state.queuePurge.secondPrompt {
 		count := m.queuePurgeMessageCount()
@@ -67,34 +52,18 @@ func (m model) QueuePurgeView() string {
 			dangerStyle.Render(fmt.Sprintf("~%d", count)),
 		)
 	} else {
-		prompt = "are you sure you want to purge all messages from: " + queueDisplay + " ?"
+		prompt = "are you sure you want to purge all messages from: " + styles.Bold.Render(m.state.queuePurge.queue.Name) + " ?"
 	}
 
-	dialog := lipgloss.JoinVertical(lipgloss.Center,
-		"warning: queue purge",
-		"",
-		prompt,
-		"",
-		buttons,
-	)
-	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
-}
-
-func (m model) switchPurgeOption() (model, tea.Cmd) {
-	m.state.queuePurge.selected = (m.state.queuePurge.selected + 1) % 2
-	return m, nil
+	return renderConfirmDialog("warning: queue purge", m.state.queuePurge.selected, prompt)
 }
 
 func (m model) QueuePurgeUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
-		case key.Matches(msg, m.keys.Left):
-			m, cmd = m.switchPurgeOption()
-		case key.Matches(msg, m.keys.Right):
-			m, cmd = m.switchPurgeOption()
+		case key.Matches(msg, m.keys.Left), key.Matches(msg, m.keys.Right):
+			m.state.queuePurge.selected = (m.state.queuePurge.selected + 1) % 2
 		case key.Matches(msg, m.keys.View):
 			if m.state.queuePurge.selected == 0 {
 				return m.queuePurgeGoBack(msg)
@@ -114,5 +83,5 @@ func (m model) QueuePurgeUpdate(msg tea.Msg) (model, tea.Cmd) {
 		}
 	}
 
-	return m, cmd
+	return m, nil
 }

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/viewport"
+	"charm.land/bubbles/v2/viewport"
 	"github.com/kontrolplane/kue/pkg/keys"
 	"github.com/kontrolplane/kue/pkg/kue"
 )
@@ -25,7 +25,7 @@ func newTestMessageDetailsModel() model {
 	}
 
 	// Initialize viewport with message body
-	vp := viewport.New(detailsRightContentWidth, detailsViewportHeight)
+	vp := viewport.New(viewport.WithWidth(detailsRightContentWidth), viewport.WithHeight(detailsViewportHeight))
 	vp.SetContent(msg.Body)
 
 	return model{
@@ -37,11 +37,15 @@ func newTestMessageDetailsModel() model {
 		height:      50,
 		state: state{
 			queueOverview: queueOverviewState{
-				selected: 0,
-				table:    initQueueOverviewTable(10),
+				selected:      0,
+				table:         initQueueOverviewTable(10),
+				selectedItems: make(map[int]bool),
+				filter:        newFilter("Type to filter..."),
 			},
 			queueDetails: queueDetailsState{
-				selected: 0,
+				selected:      0,
+				selectedItems: make(map[int]bool),
+				filter:        newFilter("Type to filter messages..."),
 				queue: kue.Queue{
 					Name: "test-queue",
 					Url:  "http://test/test-queue",

@@ -3,10 +3,9 @@ package tui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	kue "github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
@@ -27,50 +26,22 @@ func (m model) QueueDeleteSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 func (m model) QueueDeleteView() string {
 	numQueues := len(m.state.queueDelete.queues)
 
-	var queueDisplay string
+	var prompt string
 	if numQueues == 1 {
-		queueDisplay = styles.Bold.Render(m.state.queueDelete.queues[0].Name)
+		prompt = "are you sure you want to delete: " + styles.Bold.Render(m.state.queueDelete.queues[0].Name) + " ?"
 	} else {
-		queueDisplay = styles.Bold.Render(fmt.Sprintf("%d queues", numQueues))
+		prompt = fmt.Sprintf("are you sure you want to delete: %s ?", styles.Bold.Render(fmt.Sprintf("%d queues", numQueues)))
 	}
 
-	confirm := "yes"
-	abort := "no"
-
-	if m.state.queueDelete.selected == 0 {
-		abort = styles.ButtonSecondary.Render(abort)
-		confirm = styles.ButtonPrimary.Render(confirm)
-	} else {
-		abort = styles.ButtonPrimary.Render(abort)
-		confirm = styles.ButtonSecondary.Render(confirm)
-	}
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, abort, "    ", confirm)
-	dialog := lipgloss.JoinVertical(lipgloss.Center,
-		"warning: queue deletion",
-		"",
-		"are you sure you want to delete: "+queueDisplay+" ?",
-		"",
-		buttons,
-	)
-	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
-}
-
-func (m model) switchOption() (model, tea.Cmd) {
-	m.state.queueDelete.selected = (m.state.queueDelete.selected + 1) % 2
-	return m, nil
+	return renderConfirmDialog("warning: queue deletion", m.state.queueDelete.selected, prompt)
 }
 
 func (m model) QueueDeleteUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
-		case key.Matches(msg, m.keys.Left):
-			m, cmd = m.switchOption()
-		case key.Matches(msg, m.keys.Right):
-			m, cmd = m.switchOption()
+		case key.Matches(msg, m.keys.Left), key.Matches(msg, m.keys.Right):
+			m.state.queueDelete.selected = (m.state.queueDelete.selected + 1) % 2
 		case key.Matches(msg, m.keys.View):
 			if m.state.queueDelete.selected == 0 {
 				return m.QueueOverviewSwitchPage(msg)
@@ -86,12 +57,8 @@ func (m model) QueueDeleteUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Quit):
 			m.state.queueDelete.selected = 0
 			return m.QueueOverviewSwitchPage(msg)
-		default:
-			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
 		}
-	default:
-		m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
 	}
 
-	return m, cmd
+	return m, nil
 }

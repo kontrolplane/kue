@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	tui "github.com/kontrolplane/kue/pkg/tui"
 )
 
@@ -32,7 +32,7 @@ func Execute() {
 		os.Exit(1)
 	}
 
-	if _, err := tea.NewProgram(model, tea.WithAltScreen()).Run(); err != nil {
+	if _, err := tea.NewProgram(model).Run(); err != nil {
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
 	}

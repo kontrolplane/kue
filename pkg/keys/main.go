@@ -1,21 +1,20 @@
 package keys
 
-import "github.com/charmbracelet/bubbles/key"
+import "charm.land/bubbles/v2/key"
 
-// keyMap defines a set of keybindings. To work for help it must satisfy
+// KeyMap defines a set of keybindings. To work for help it must satisfy
 // key.Map. It could also very easily be a map[string]key.Binding.
 type KeyMap struct {
-	Up            key.Binding
-	Down          key.Binding
-	Left          key.Binding
-	Right         key.Binding
-	Help          key.Binding
-	View          key.Binding
-	Select        key.Binding
-	Filter        key.Binding
-	Create        key.Binding
-	Delete        key.Binding
-	DeleteMessage   key.Binding
+	Up              key.Binding
+	Down            key.Binding
+	Left            key.Binding
+	Right           key.Binding
+	Help            key.Binding
+	View            key.Binding
+	Select          key.Binding
+	Filter          key.Binding
+	Create          key.Binding
+	Delete          key.Binding
 	CopyToClipboard key.Binding
 	Purge           key.Binding
 	Redrive         key.Binding
@@ -45,7 +44,6 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.Filter,
 			k.Create,
 			k.Delete,
-			k.DeleteMessage,
 			k.CopyToClipboard,
 			k.Purge,
 			k.Redrive,
@@ -94,10 +92,6 @@ var Keys = KeyMap{
 	Delete: key.NewBinding(
 		key.WithKeys("ctrl+d"),
 		key.WithHelp("ctrl+d", "delete"),
-	),
-	DeleteMessage: key.NewBinding(
-		key.WithKeys("ctrl+d"),
-		key.WithHelp("ctrl+d", "delete message"),
 	),
 	CopyToClipboard: key.NewBinding(
 		key.WithKeys("c"),

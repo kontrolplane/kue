@@ -127,3 +127,33 @@ Enter
 Sleep 1s
 
 Sleep 15s
+
+# Filter to the emails deadletter queue (has 1 seeded DLQ message)
+Type "/"
+Sleep 1s
+Type "emails-dead"
+Sleep 2s
+Enter
+Sleep 2s
+
+# Enter the DLQ details
+Enter
+Sleep 4s
+
+# Trigger redrive from queue details
+Ctrl+R
+Sleep 3s
+
+Screenshot ./assets/pages/queue/redrive-confirmation.png
+
+Sleep 2s
+
+# Confirm redrive (select yes)
+Right
+Sleep 1s
+Enter
+Sleep 8s
+
+Screenshot ./assets/pages/queue/redrive-progress.png
+
+Sleep 5s

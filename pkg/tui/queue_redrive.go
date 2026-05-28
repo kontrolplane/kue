@@ -3,11 +3,11 @@ package tui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	kue "github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
@@ -45,32 +45,9 @@ func (m model) QueueRedriveView() string {
 	if m.state.queueRedrive.inProgress {
 		return m.renderRedriveProgress()
 	}
-	return m.renderRedriveConfirmation()
-}
 
-func (m model) renderRedriveConfirmation() string {
-	queueDisplay := styles.Bold.Render(m.state.queueRedrive.queue.Name)
-
-	confirm := "yes"
-	abort := "no"
-
-	if m.state.queueRedrive.selected == 0 {
-		abort = styles.ButtonSecondary.Render(abort)
-		confirm = styles.ButtonPrimary.Render(confirm)
-	} else {
-		abort = styles.ButtonPrimary.Render(abort)
-		confirm = styles.ButtonSecondary.Render(confirm)
-	}
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, abort, "    ", confirm)
-	dialog := lipgloss.JoinVertical(lipgloss.Center,
-		"warning: DLQ redrive",
-		"",
-		"are you sure you want to redrive messages from: "+queueDisplay+" ?",
-		"",
-		buttons,
-	)
-	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
+	prompt := "are you sure you want to redrive messages from: " + styles.Bold.Render(m.state.queueRedrive.queue.Name) + " ?"
+	return renderConfirmDialog("warning: DLQ redrive", m.state.queueRedrive.selected, prompt)
 }
 
 func (m model) renderRedriveProgress() string {
@@ -127,10 +104,10 @@ func (m model) renderRedriveProgress() string {
 	}
 
 	bar := progress.New(
-		progress.WithSolidFill(string(styles.AccentColor)),
+		progress.WithColors(styles.AccentColor),
 		progress.WithWidth(barWidth),
 	)
-	bar.EmptyColor = string(styles.DarkGray)
+	bar.EmptyColor = styles.DarkGray
 
 	lines = append(lines, bar.ViewAs(pct))
 	lines = append(lines, "")
@@ -165,16 +142,9 @@ func (m model) renderRedriveProgress() string {
 	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, box)
 }
 
-func (m model) switchRedriveOption() (model, tea.Cmd) {
-	m.state.queueRedrive.selected = (m.state.queueRedrive.selected + 1) % 2
-	return m, nil
-}
-
 func (m model) QueueRedriveUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.state.queueRedrive.inProgress {
 			if key.Matches(msg, m.keys.Quit) {
 				return m.queueRedriveGoBack(msg)
@@ -182,10 +152,8 @@ func (m model) QueueRedriveUpdate(msg tea.Msg) (model, tea.Cmd) {
 			return m, nil
 		}
 		switch {
-		case key.Matches(msg, m.keys.Left):
-			m, cmd = m.switchRedriveOption()
-		case key.Matches(msg, m.keys.Right):
-			m, cmd = m.switchRedriveOption()
+		case key.Matches(msg, m.keys.Left), key.Matches(msg, m.keys.Right):
+			m.state.queueRedrive.selected = (m.state.queueRedrive.selected + 1) % 2
 		case key.Matches(msg, m.keys.View):
 			if m.state.queueRedrive.selected == 0 {
 				return m.queueRedriveGoBack(msg)
@@ -204,7 +172,7 @@ func (m model) QueueRedriveUpdate(msg tea.Msg) (model, tea.Cmd) {
 		}
 	}
 
-	return m, cmd
+	return m, nil
 }
 
 // findSourceQueueArn returns the ARN of the source queue that uses the given

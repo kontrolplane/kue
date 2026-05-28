@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/table"
+	"charm.land/lipgloss/v2"
 	"github.com/kontrolplane/kue/pkg/client"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	keys "github.com/kontrolplane/kue/pkg/keys"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/messages"
@@ -49,14 +49,14 @@ func NewModel(
 				table:         queueOverviewTable,
 				queues:        nil,
 				selectedItems: make(map[int]bool),
-				filterInput:   initFilterInput(),
+				filter:        newFilter("Type to filter..."),
 			},
 			queueDetails: queueDetailsState{
-				selected:        0,
-				messages:        nil,
+				selected:      0,
+				messages:      nil,
 				attributesTable: "",
-				selectedItems:   make(map[int]bool),
-				filterInput:     initMessageFilterInput(),
+				selectedItems: make(map[int]bool),
+				filter:        newFilter("Type to filter messages..."),
 			},
 			queueDelete: queueDeleteState{
 				selected: 0,
@@ -81,7 +81,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m = m.resizeTables()
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if key.Matches(msg, m.keys.Help) {
 			m.showHelp = !m.showHelp
 			return m, nil
@@ -99,7 +99,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.error = ""
 			m.state.queueOverview.queues = msg.Queues
-			m = m.updateQueueOverviewTable()
+			m = m.rebuildQueueTable()
 			if m.page == queueOverview {
 				cmds = append(cmds, commands.ScheduleRefresh("queueOverview"))
 			}
@@ -110,7 +110,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.error = fmt.Sprintf("Error fetching queue attributes: %v", msg.Err)
 		} else {
 			m.state.queueDetails.queue = msg.Queue
-			m.state.queueDetails.attributesTable = renderAttributesTable(msg.Queue)
+			m.state.queueDetails.attributesTable = renderAttributesPanel(msg.Queue)
 		}
 
 	case messages.MessagesLoadedMsg:
@@ -120,7 +120,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.error = fmt.Sprintf("Error fetching messages: %v", msg.Err)
 		} else {
 			m.state.queueDetails.messages = msg.Messages
-			m = m.updateMessagesTable()
+			m = m.rebuildMessagesTable()
 			if m.page == queueDetails {
 				cmds = append(cmds, commands.ScheduleRefresh("queueDetails"))
 			}
@@ -292,7 +292,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m model) View() string {
+func (m model) View() tea.View {
 	h := formatHeader(m.projectName, m.programName, views[m.page], m.awsInfo)
 	f := m.renderFooter()
 	var c string
@@ -333,13 +333,19 @@ func (m model) View() string {
 
 	fixedContent := lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Top, c)
 	bordered := styles.MainBorder.Render(fixedContent)
-	mainView := h + "\n\n" + bordered + "\n\n" + f
+
+	header := lipgloss.NewStyle().MarginBottom(1).Render(h)
+	footer := lipgloss.NewStyle().MarginTop(1).Render(f)
+
+	mainView := lipgloss.JoinVertical(lipgloss.Center, header, bordered, footer)
 
 	if m.showHelp {
 		mainView = m.renderHelpOverlay(mainView)
 	}
 
-	return styles.ContentWrapper(m.width, m.height).Render(mainView)
+	v := tea.NewView(styles.ContentWrapper(m.width, m.height).Render(mainView))
+	v.AltScreen = true
+	return v
 }
 
 func (m model) renderFooter() string {
@@ -349,19 +355,19 @@ func (m model) renderFooter() string {
 	}
 
 	// Show filter input when filtering
-	if m.page == queueOverview && m.state.queueOverview.filtering {
-		return m.renderFilterBar(m.state.queueOverview.filterInput.View())
+	if m.page == queueOverview && m.state.queueOverview.filter.active {
+		return m.renderFilterBar(m.state.queueOverview.filter.View())
 	}
-	if m.page == queueDetails && m.state.queueDetails.filtering {
-		return m.renderFilterBar(m.state.queueDetails.filterInput.View())
+	if m.page == queueDetails && m.state.queueDetails.filter.active {
+		return m.renderFilterBar(m.state.queueDetails.filter.View())
 	}
 
 	// Show filter status if filter is active
-	if m.page == queueOverview && m.state.queueOverview.filterText != "" {
-		return m.renderFilterStatus(m.state.queueOverview.filterText)
+	if m.page == queueOverview && m.state.queueOverview.filter.text != "" {
+		return m.renderFilterStatus(m.state.queueOverview.filter.text)
 	}
-	if m.page == queueDetails && m.state.queueDetails.filterText != "" {
-		return m.renderFilterStatus(m.state.queueDetails.filterText)
+	if m.page == queueDetails && m.state.queueDetails.filter.text != "" {
+		return m.renderFilterStatus(m.state.queueDetails.filter.text)
 	}
 
 	// Show selection info if items are selected
@@ -479,6 +485,7 @@ func (m model) resizeTables() model {
 		table.WithColumns(cols),
 		table.WithRows(rows),
 		table.WithFocused(focused),
+		table.WithWidth(contentWidth),
 		table.WithHeight(tableHeight),
 	)
 	m.state.queueOverview.table.SetStyles(styles.TableStyles())
@@ -493,6 +500,7 @@ func (m model) resizeTables() model {
 			table.WithColumns(msgCols),
 			table.WithRows(msgRows),
 			table.WithFocused(msgFocused),
+			table.WithWidth(contentWidth),
 			table.WithHeight(m.getMessageTableHeight()),
 		)
 		m.state.queueDetails.messagesTable.SetStyles(styles.TableStyles())
@@ -502,44 +510,9 @@ func (m model) resizeTables() model {
 	return m
 }
 
-func (m model) updateQueueOverviewTable() model {
-	var rows []table.Row
-	for i, queue := range m.state.queueOverview.queues {
-		queueType := "standard"
-		if queue.FifoQueue == "true" {
-			queueType = "fifo"
-		}
-		visibility := queue.VisibilityTimeout + "s"
-		retention := formatRetention(queue.MessageRetentionPeriod)
-
-		// Add selection indicator to queue name
-		queueName := queue.Name
-		if m.state.queueOverview.selectedItems[i] {
-			queueName = "● " + queue.Name
-		}
-
-		rows = append(rows, table.Row{
-			queueName,
-			queueType,
-			centerText(queue.ApproximateNumberOfMessages, 10),
-			centerText(queue.ApproximateNumberOfMessagesNotVisible, 10),
-			centerText(queue.ApproximateNumberOfMessagesDelayed, 10),
-			centerText(visibility, 10),
-			centerText(retention, 10),
-			queue.LastModified,
-		})
-	}
-
-	m.state.queueOverview.table.SetRows(rows)
-	if m.state.queueOverview.selected >= len(m.state.queueOverview.queues) {
-		m.state.queueOverview.selected = max(0, len(m.state.queueOverview.queues)-1)
-	}
-	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
-
-	return m
-}
-
-func (m model) updateQueueOverviewTableFiltered() model {
+// rebuildQueueTable rebuilds the queue overview table rows from filtered data,
+// respecting current selection state.
+func (m model) rebuildQueueTable() model {
 	filteredQueues := m.getFilteredQueues()
 	var rows []table.Row
 	for _, queue := range filteredQueues {
@@ -562,11 +535,11 @@ func (m model) updateQueueOverviewTableFiltered() model {
 		rows = append(rows, table.Row{
 			queueName,
 			queueType,
-			centerText(queue.ApproximateNumberOfMessages, 10),
-			centerText(queue.ApproximateNumberOfMessagesNotVisible, 10),
-			centerText(queue.ApproximateNumberOfMessagesDelayed, 10),
-			centerText(visibility, 10),
-			centerText(retention, 10),
+			queue.ApproximateNumberOfMessages,
+			queue.ApproximateNumberOfMessagesNotVisible,
+			queue.ApproximateNumberOfMessagesDelayed,
+			visibility,
+			retention,
 			queue.LastModified,
 		})
 	}
@@ -580,34 +553,9 @@ func (m model) updateQueueOverviewTableFiltered() model {
 	return m
 }
 
-func (m model) updateMessagesTable() model {
-	var rows []table.Row
-	for i, message := range m.state.queueDetails.messages {
-		// Add selection indicator to message ID
-		messageID := message.MessageID
-		if m.state.queueDetails.selectedItems[i] {
-			messageID = "● " + message.MessageID
-		}
-
-		rows = append(rows, table.Row{
-			messageID,
-			message.Body,
-			message.SentTimestamp,
-			fmt.Sprintf("%d", len(message.Body)),
-		})
-	}
-
-	m.state.queueDetails.messagesTable = initMessageDetailsTable(m.getMessageTableHeight())
-	m.state.queueDetails.messagesTable.SetRows(rows)
-	if m.state.queueDetails.selected >= len(m.state.queueDetails.messages) {
-		m.state.queueDetails.selected = max(0, len(m.state.queueDetails.messages)-1)
-	}
-	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
-
-	return m
-}
-
-func (m model) updateMessagesTableFiltered() model {
+// rebuildMessagesTable rebuilds the messages table rows from filtered data,
+// respecting current selection state.
+func (m model) rebuildMessagesTable() model {
 	filteredMessages := m.getFilteredMessages()
 	var rows []table.Row
 	for _, message := range filteredMessages {
@@ -659,8 +607,4 @@ func formatRetention(seconds string) string {
 	}
 
 	return fmt.Sprintf("%ds", secs)
-}
-
-func centerText(text string, width int) string {
-	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(text)
 }

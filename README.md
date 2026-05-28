@@ -80,6 +80,11 @@
   <img width="2400" alt="kue queue delete" src="./assets/pages/queue/delete.png">
 </p>
 
+`queue redrive`
+<p align="center">
+  <img width="2400" alt="kue queue redrive" src="./assets/pages/queue/redrive.png">
+</p>
+
 ## development
 
 Kue uses [LocalStack](https://www.localstack.cloud/) running in Docker to simulate AWS SQS locally. This allows you to develop and test without connecting to real AWS services.

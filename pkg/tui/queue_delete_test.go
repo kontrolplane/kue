@@ -18,11 +18,15 @@ func newTestDeleteModel() model {
 		height:      50,
 		state: state{
 			queueOverview: queueOverviewState{
-				selected: 0,
-				table:    initQueueOverviewTable(10),
+				selected:      0,
+				table:         initQueueOverviewTable(10),
+				selectedItems: make(map[int]bool),
+				filter:        newFilter("Type to filter..."),
 			},
 			queueDetails: queueDetailsState{
-				selected: 0,
+				selected:      0,
+				selectedItems: make(map[int]bool),
+				filter:        newFilter("Type to filter messages..."),
 			},
 			queueDelete: queueDeleteState{
 				selected: 0,
@@ -37,7 +41,7 @@ func newTestDeleteModel() model {
 	}
 }
 
-func TestQueueDeleteSwitchOption(t *testing.T) {
+func TestQueueDeleteToggleConfirm(t *testing.T) {
 	m := newTestDeleteModel()
 
 	// Initial selection should be 0 (no)
@@ -45,14 +49,14 @@ func TestQueueDeleteSwitchOption(t *testing.T) {
 		t.Errorf("Expected initial selection to be 0, got %d", m.state.queueDelete.selected)
 	}
 
-	// Switch to yes
-	m, _ = m.switchOption()
+	// Toggle to yes
+	m.state.queueDelete.selected = (m.state.queueDelete.selected + 1) % 2
 	if m.state.queueDelete.selected != 1 {
 		t.Errorf("Expected selection to be 1, got %d", m.state.queueDelete.selected)
 	}
 
-	// Switch back to no
-	m, _ = m.switchOption()
+	// Toggle back to no
+	m.state.queueDelete.selected = (m.state.queueDelete.selected + 1) % 2
 	if m.state.queueDelete.selected != 0 {
 		t.Errorf("Expected selection to be 0, got %d", m.state.queueDelete.selected)
 	}

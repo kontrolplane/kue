@@ -2,14 +2,12 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/table"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	kue "github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
@@ -23,97 +21,95 @@ type queueDetailsState struct {
 	attributesTable string
 	messagesTable   table.Model
 	selectedItems   map[int]bool // tracks which messages are selected for bulk operations
-	filtering       bool
-	filterInput     textinput.Model
-	filterText      string
+	filter          filterModel
 }
 
-// Message table column definitions.
-var messageColumnMap = map[int]string{
-	0: "message identifier",
-	1: "body",
-	2: "sent timestamp",
-	3: "size",
-}
-
-var messageColumns []table.Column = []table.Column{
-	{
-		Title: messageColumnMap[0], Width: 30,
-	},
-	{
-		Title: messageColumnMap[1], Width: 60,
-	},
-	{
-		Title: messageColumnMap[2], Width: 30,
-	},
-	{
-		Title: messageColumnMap[3], Width: 10,
-	},
-}
-
-func renderAttributesTable(q kue.Queue) string {
-	columnsLeft := []table.Column{
-		{Title: "attribute", Width: 30},
-		{Title: "value", Width: 60},
-	}
-
-	columnsRight := []table.Column{
-		{Title: "attribute", Width: 30},
-		{Title: "value", Width: 10},
-	}
-
-	rowsLeft := []table.Row{
-		{"name", q.Name},
-		{"arn", q.Arn},
-		{"created at", q.CreatedTimestamp},
-		{"last modified", q.LastModified},
-		{"visibility timeout", q.VisibilityTimeout},
-	}
-
-	rowsRight := []table.Row{
-		{"number of messages", q.ApproximateNumberOfMessages},
-		{"number not visible", q.ApproximateNumberOfMessagesNotVisible},
-		{"number delayed", q.ApproximateNumberOfMessagesDelayed},
-		{"delay seconds", q.DelaySeconds},
-		{"retention period", q.MessageRetentionPeriod},
-	}
-
-	leftTable := table.New(
-		table.WithColumns(columnsLeft),
-		table.WithRows(rowsLeft),
-		table.WithFocused(false),
-		table.WithHeight(len(rowsLeft)+1),
+func messageColumns() []table.Column {
+	const (
+		numColumns     = 4
+		cellPadding    = numColumns * 2 // bubbles table adds 1 char padding on each side per cell
+		messageIDWidth = 34
+		sentWidth      = 28
+		sizeWidth      = 10
 	)
+	fixedWidth := messageIDWidth + sentWidth + sizeWidth
+	bodyWidth := contentWidth - fixedWidth - cellPadding
 
-	rightTable := table.New(
-		table.WithColumns(columnsRight),
-		table.WithRows(rowsRight),
-		table.WithFocused(false),
-		table.WithHeight(len(rowsRight)+1),
-	)
-
-	leftTable.SetStyles(styles.AttributesTableStyles())
-	rightTable.SetStyles(styles.AttributesTableStyles())
-
-	leftView := lipgloss.NewStyle().Render(stripViewBeforeToken(leftTable.View(), rowsLeft[0][0]))
-	rightView := lipgloss.NewStyle().Render(stripViewBeforeToken(rightTable.View(), rowsRight[0][0]))
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
+	return []table.Column{
+		{Title: "Message ID", Width: messageIDWidth},
+		{Title: "Body", Width: bodyWidth},
+		{Title: "Sent", Width: sentWidth},
+		{Title: "Size", Width: sizeWidth},
+	}
 }
 
-// stripViewBeforeToken removes everything before the first line that contains
-// the provided token. This effectively drops the header and any blank line
-// above the first data row.
-func stripViewBeforeToken(view string, token string) string {
-	lines := strings.Split(view, "\n")
-	start := 0
-	for i, line := range lines {
-		if strings.Contains(line, token) {
-			start = i
-			break
-		}
+// renderAttributesPanel renders queue attributes as a two-column key-value layout
+// aligned with the message table columns below it.
+func renderAttributesPanel(q kue.Queue) string {
+	// Derive panel widths from the message table columns so the left panel
+	// aligns with "Message ID" and the right panel aligns with "Sent".
+	cols := messageColumns()
+	const cellPad = 2 // 1 char padding on each side per cell
+	leftPanelWidth := cols[0].Width + cellPad + cols[1].Width + cellPad
+	rightPanelWidth := cols[2].Width + cellPad + cols[3].Width + cellPad
+
+	const labelWidth = 16
+	leftValueWidth := leftPanelWidth - labelWidth
+	rightValueWidth := rightPanelWidth - labelWidth
+
+	labelStyle := lipgloss.NewStyle().
+		Foreground(styles.MediumGray).
+		Width(labelWidth)
+
+	leftValue := lipgloss.NewStyle().
+		Foreground(styles.TextLight).
+		Width(leftValueWidth).
+		MaxWidth(leftValueWidth)
+
+	rightValue := lipgloss.NewStyle().
+		Foreground(styles.TextLight).
+		Width(rightValueWidth).
+		MaxWidth(rightValueWidth)
+
+	accentValue := lipgloss.NewStyle().
+		Foreground(styles.AccentColor).
+		Bold(true).
+		Width(rightValueWidth).
+		MaxWidth(rightValueWidth)
+
+	leftRow := func(label, value string) string {
+		return labelStyle.Render(label) + leftValue.Render(value)
 	}
-	return strings.Join(lines[start:], "\n")
+
+	rightRow := func(label, value string) string {
+		return labelStyle.Render(label) + rightValue.Render(value)
+	}
+
+	rightAccentRow := func(label, value string) string {
+		return labelStyle.Render(label) + accentValue.Render(value)
+	}
+
+	// Left column: identity & config — aligns with Message ID column
+	leftRows := lipgloss.NewStyle().Width(leftPanelWidth).PaddingLeft(1).Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			leftRow("Name", q.Name),
+			leftRow("ARN", q.Arn),
+			leftRow("Created", q.CreatedTimestamp),
+			leftRow("Modified", q.LastModified),
+			leftRow("Visibility", q.VisibilityTimeout+"s"),
+		))
+
+	// Right column: message stats — aligns with Sent column
+	rightRows := lipgloss.NewStyle().Width(rightPanelWidth).PaddingLeft(1).Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			rightAccentRow("Messages", q.ApproximateNumberOfMessages),
+			rightRow("Not Visible", q.ApproximateNumberOfMessagesNotVisible),
+			rightRow("Delayed", q.ApproximateNumberOfMessagesDelayed),
+			rightRow("Delay Seconds", q.DelaySeconds),
+			rightRow("Retention", formatRetention(q.MessageRetentionPeriod)),
+		))
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftRows, rightRows)
 }
 
 func initMessageDetailsTable(height int) table.Model {
@@ -122,8 +118,9 @@ func initMessageDetailsTable(height int) table.Model {
 	}
 
 	t := table.New(
-		table.WithColumns(messageColumns),
+		table.WithColumns(messageColumns()),
 		table.WithFocused(true),
+		table.WithWidth(contentWidth),
 		table.WithHeight(height),
 	)
 
@@ -138,9 +135,7 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	m.loadingMsg = "Loading queue details..."
 	m.state.queueDetails.selected = 0
 	m.state.queueDetails.selectedItems = make(map[int]bool)
-	m.state.queueDetails.filtering = false
-	m.state.queueDetails.filterText = ""
-	m.state.queueDetails.filterInput = initMessageFilterInput()
+	m.state.queueDetails.filter = newFilter("Type to filter messages...")
 
 	// Clear stale data to prevent showing old content during load
 	m.state.queueDetails.attributesTable = ""
@@ -153,23 +148,14 @@ func (m model) QueueDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	)
 }
 
-func initMessageFilterInput() textinput.Model {
-	ti := textinput.New()
-	ti.Placeholder = "Type to filter messages..."
-	ti.CharLimit = 50
-	ti.Width = 30
-	return ti
-}
-
 func (m model) getFilteredMessages() []kue.Message {
-	if m.state.queueDetails.filterText == "" {
+	if m.state.queueDetails.filter.text == "" {
 		return m.state.queueDetails.messages
 	}
-	filter := strings.ToLower(m.state.queueDetails.filterText)
 	var filtered []kue.Message
 	for _, msg := range m.state.queueDetails.messages {
-		if strings.Contains(strings.ToLower(msg.MessageID), filter) ||
-			strings.Contains(strings.ToLower(msg.Body), filter) {
+		if m.state.queueDetails.filter.Matches(msg.MessageID) ||
+			m.state.queueDetails.filter.Matches(msg.Body) {
 			filtered = append(filtered, msg)
 		}
 	}
@@ -190,24 +176,24 @@ func (m model) MessagesCount() int {
 	return len(m.state.queueDetails.messages)
 }
 
-func (m model) nextMessage() (model, tea.Cmd) {
+func (m model) nextMessage() model {
 	filteredMessages := m.getFilteredMessages()
 	if m.state.queueDetails.selected < len(filteredMessages)-1 {
 		m.state.queueDetails.selected++
 	}
-	return m, nil
+	return m
 }
 
-func (m model) previousMessage() (model, tea.Cmd) {
+func (m model) previousMessage() model {
 	if m.state.queueDetails.selected > 0 {
 		m.state.queueDetails.selected--
 	}
-	return m, nil
+	return m
 }
 
-func (m model) toggleMessageSelection() (model, tea.Cmd) {
+func (m model) toggleMessageSelection() model {
 	if len(m.state.queueDetails.messages) == 0 {
-		return m, nil
+		return m
 	}
 	idx := m.state.queueDetails.selected
 	if m.state.queueDetails.selectedItems == nil {
@@ -218,7 +204,7 @@ func (m model) toggleMessageSelection() (model, tea.Cmd) {
 	} else {
 		m.state.queueDetails.selectedItems[idx] = true
 	}
-	return m, nil
+	return m
 }
 
 func (m model) getSelectedMessages() []kue.Message {
@@ -232,47 +218,31 @@ func (m model) getSelectedMessages() []kue.Message {
 }
 
 func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	// Handle filter mode
-	if m.state.queueDetails.filtering {
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			switch msg.Type {
-			case tea.KeyEsc:
-				m.state.queueDetails.filtering = false
-				m.state.queueDetails.filterInput.Blur()
-				return m, nil
-			case tea.KeyEnter:
-				m.state.queueDetails.filtering = false
-				m.state.queueDetails.filterText = m.state.queueDetails.filterInput.Value()
-				m.state.queueDetails.filterInput.Blur()
-				m.state.queueDetails.selected = 0
-				return m, nil
-			}
-		}
-		m.state.queueDetails.filterInput, cmd = m.state.queueDetails.filterInput.Update(msg)
-		// Live filtering as user types
-		m.state.queueDetails.filterText = m.state.queueDetails.filterInput.Value()
+	// Handle filter mode - delegate to filter model
+	if m.state.queueDetails.filter.active {
+		var cmd tea.Cmd
+		m.state.queueDetails.filter, cmd = m.state.queueDetails.filter.Update(msg)
 		m.state.queueDetails.selected = 0
+		m = m.rebuildMessagesTable()
 		return m, cmd
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.Filter):
-			m.state.queueDetails.filtering = true
-			m.state.queueDetails.filterInput.Focus()
-			return m, textinput.Blink
+			var cmd tea.Cmd
+			m.state.queueDetails.filter, cmd = m.state.queueDetails.filter.Activate()
+			return m, cmd
 		case key.Matches(msg, m.keys.Down):
-			m, cmd = m.nextMessage()
-			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
+			m = m.nextMessage()
+			m = m.rebuildMessagesTable()
 		case key.Matches(msg, m.keys.Up):
-			m, cmd = m.previousMessage()
-			m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
+			m = m.previousMessage()
+			m = m.rebuildMessagesTable()
 		case key.Matches(msg, m.keys.Select):
-			m, cmd = m.toggleMessageSelection()
+			m = m.toggleMessageSelection()
+			m = m.rebuildMessagesTable()
 		case key.Matches(msg, m.keys.View):
 			filteredMessages := m.getFilteredMessages()
 			if len(filteredMessages) > 0 {
@@ -283,7 +253,7 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 				m.state.queueMessageDetails.isFifo = m.state.queueDetails.queue.FifoQueue == "true"
 				return m.QueueMessageDetailsSwitchPage(msg)
 			}
-		case key.Matches(msg, m.keys.DeleteMessage):
+		case key.Matches(msg, m.keys.Delete):
 			filteredMessages := m.getFilteredMessages()
 			if len(filteredMessages) > 0 {
 				// If items are selected, delete selected items; otherwise delete current item
@@ -326,41 +296,43 @@ func (m model) QueueDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 			return m.QueueMessageCreateSwitchPage(msg)
 		case key.Matches(msg, m.keys.Quit):
 			// If filtering, clear filter
-			if m.state.queueDetails.filterText != "" {
-				m.state.queueDetails.filterText = ""
-				m.state.queueDetails.filterInput.SetValue("")
+			if m.state.queueDetails.filter.text != "" {
+				m.state.queueDetails.filter = m.state.queueDetails.filter.Clear()
 				m.state.queueDetails.selected = 0
+				m = m.rebuildMessagesTable()
 				return m, nil
 			}
 			// If items are selected, clear selection instead of going back
 			if len(m.state.queueDetails.selectedItems) > 0 {
 				m.state.queueDetails.selectedItems = make(map[int]bool)
+				m = m.rebuildMessagesTable()
 				return m, nil
 			}
 			return m.QueueOverviewSwitchPage(msg)
 		default:
+			var cmd tea.Cmd
 			m.state.queueDetails.messagesTable, cmd = m.state.queueDetails.messagesTable.Update(msg)
+			return m, cmd
 		}
 	default:
+		var cmd tea.Cmd
 		m.state.queueDetails.messagesTable, cmd = m.state.queueDetails.messagesTable.Update(msg)
+		return m, cmd
 	}
 
-	return m, cmd
+	return m, nil
 }
 
 func (m model) QueueDetailsView() string {
-	var attributesTableView string
+	// Attributes section
+	var attributesView string
 	if m.state.queueDetails.attributesTable != "" {
-		attributesTableView = m.state.queueDetails.attributesTable
+		attributesView = m.state.queueDetails.attributesTable
 	} else {
-		attributesTableView = lipgloss.NewStyle().
+		attributesView = lipgloss.NewStyle().
 			Foreground(styles.MediumGray).
 			Render("Loading queue attributes...")
 	}
-
-	// Rebuild table rows to reflect current selection state
-	m = m.updateMessagesTableFiltered()
-	messagesTableView := m.state.queueDetails.messagesTable.View()
 
 	filteredMessages := m.getFilteredMessages()
 	if len(filteredMessages) == 0 {
@@ -368,8 +340,11 @@ func (m model) QueueDetailsView() string {
 			Foreground(styles.MediumGray).
 			Render(fmt.Sprintf("No messages found in queue: %s", m.state.queueDetails.queue.Name))
 
-		return attributesTableView + "\n\n" + messagesTableView + "\n\n" + emptyMsg
+		tableHeight := m.getMessageTableHeight()
+		emptyView := lipgloss.Place(contentWidth, tableHeight, lipgloss.Center, lipgloss.Center, emptyMsg)
+		return attributesView + "\n\n" + emptyView
 	}
 
-	return attributesTableView + "\n\n" + messagesTableView
+	messagesTableView := m.state.queueDetails.messagesTable.View()
+	return attributesView + "\n\n" + messagesTableView
 }

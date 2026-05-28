@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	kue "github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
@@ -88,7 +88,7 @@ func newQueueCreateForm(input *queueCreateInput) *huh.Form {
 				Description("Seconds messages are kept before deletion (60-1209600)").
 				Placeholder("345600").
 				Value(&input.messageRetentionPeriod).
-				Validate(validateIntRangeOrEmpty(60, 1209600)),
+				Validate(validateIntRange(60, 1209600)),
 
 			huh.NewInput().
 				Title("Delivery Delay").
@@ -105,7 +105,7 @@ func newQueueCreateForm(input *queueCreateInput) *huh.Form {
 				Description("Maximum message size in bytes (1024-262144)").
 				Placeholder("262144").
 				Value(&input.maximumMessageSize).
-				Validate(validateIntRangeOrEmpty(1024, 262144)),
+				Validate(validateIntRange(1024, 262144)),
 
 			huh.NewInput().
 				Title("Receive Wait Time").
@@ -167,22 +167,6 @@ func validateIntRange(min, max int) func(string) error {
 	}
 }
 
-func validateIntRangeOrEmpty(min, max int) func(string) error {
-	return func(s string) error {
-		if s == "" {
-			return nil
-		}
-		val, err := strconv.Atoi(s)
-		if err != nil {
-			return fmt.Errorf("must be a valid number")
-		}
-		if val < min || val > max {
-			return fmt.Errorf("must be between %d and %d", min, max)
-		}
-		return nil
-	}
-}
-
 func (m model) QueueCreateSwitchPage(msg tea.Msg) (model, tea.Cmd) {
 	m.error = ""
 	m.state.queueCreate.input = &queueCreateInput{
@@ -199,7 +183,7 @@ func (m model) QueueCreateView() string {
 	if m.state.queueCreate.form == nil {
 		return "Loading..."
 	}
-	content := lipgloss.JoinVertical(lipgloss.Left,
+	content := lipgloss.JoinVertical(lipgloss.Center,
 		m.renderFormHeader(),
 		m.state.queueCreate.form.View(),
 	)
@@ -229,9 +213,16 @@ func detectFormStep(view string) int {
 func (m model) renderFormHeader() string {
 	isFifo := m.state.queueCreate.input != nil && m.state.queueCreate.input.queueType == "fifo"
 
-	steps := []string{"1. Basic", "2. Messages", "3. Advanced"}
+	type stepDef struct {
+		name string
+	}
+	steps := []stepDef{
+		{name: "Basic"},
+		{name: "Messages"},
+		{name: "Advanced"},
+	}
 	if isFifo {
-		steps = append(steps, "4. FIFO")
+		steps = append(steps, stepDef{name: "FIFO"})
 	}
 
 	currentStep := m.state.queueCreate.currentStep
@@ -239,18 +230,38 @@ func (m model) renderFormHeader() string {
 		currentStep = 2
 	}
 
+	doneStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
+	activeStyle := lipgloss.NewStyle().Foreground(styles.TextLight).Bold(true)
+	futureStyle := lipgloss.NewStyle().Foreground(styles.DarkGray)
+	connectorDone := lipgloss.NewStyle().Foreground(styles.AccentColor)
+	connectorFuture := lipgloss.NewStyle().Foreground(styles.DarkGray)
+
 	var stepViews []string
 	for i, step := range steps {
-		style := lipgloss.NewStyle().PaddingRight(3)
+		var indicator, label string
 		switch {
 		case i < currentStep:
-			style = style.Foreground(styles.AccentColor)
+			indicator = doneStyle.Render("✓")
+			label = doneStyle.Render(" " + step.name)
 		case i == currentStep:
-			style = style.Foreground(styles.TextLight).Bold(true)
+			indicator = activeStyle.Render("●")
+			label = activeStyle.Render(" " + step.name)
 		default:
-			style = style.Foreground(styles.DarkGray)
+			indicator = futureStyle.Render("○")
+			label = futureStyle.Render(" " + step.name)
 		}
-		stepViews = append(stepViews, style.Render(step))
+
+		stepViews = append(stepViews, indicator+label)
+
+		// Add connector between steps
+		if i < len(steps)-1 {
+			conn := " ── "
+			if i < currentStep {
+				stepViews = append(stepViews, connectorDone.Render(conn))
+			} else {
+				stepViews = append(stepViews, connectorFuture.Render(conn))
+			}
+		}
 	}
 
 	return lipgloss.NewStyle().
@@ -269,7 +280,7 @@ func (m model) QueueCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
 		return m, nil
 	}
 
-	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "esc" {
+	if msg, ok := msg.(tea.KeyPressMsg); ok && msg.String() == "esc" {
 		return m.QueueOverviewSwitchPage(msg)
 	}
 

@@ -7,7 +7,7 @@ import (
 
 	"github.com/atotto/clipboard"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/messages"
 )

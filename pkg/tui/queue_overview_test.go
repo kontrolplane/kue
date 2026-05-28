@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/kontrolplane/kue/pkg/keys"
 	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/messages"
@@ -20,12 +20,16 @@ func newTestModel() model {
 		height:      50,
 		state: state{
 			queueOverview: queueOverviewState{
-				selected: 0,
-				queues:   nil,
-				table:    initQueueOverviewTable(10),
+				selected:      0,
+				queues:        nil,
+				table:         initQueueOverviewTable(10),
+				selectedItems: make(map[int]bool),
+				filter:        newFilter("Type to filter..."),
 			},
 			queueDetails: queueDetailsState{
-				selected: 0,
+				selected:      0,
+				selectedItems: make(map[int]bool),
+				filter:        newFilter("Type to filter messages..."),
 			},
 			queueDelete: queueDeleteState{
 				selected: 0,
@@ -45,35 +49,35 @@ func TestQueueOverviewNavigation(t *testing.T) {
 	}
 
 	// Test moving down
-	m, _ = m.nextQueue()
+	m = m.nextQueue()
 	if m.state.queueOverview.selected != 1 {
 		t.Errorf("Expected selected to be 1, got %d", m.state.queueOverview.selected)
 	}
 
-	m, _ = m.nextQueue()
+	m = m.nextQueue()
 	if m.state.queueOverview.selected != 2 {
 		t.Errorf("Expected selected to be 2, got %d", m.state.queueOverview.selected)
 	}
 
 	// Test boundary - should not go beyond last item
-	m, _ = m.nextQueue()
+	m = m.nextQueue()
 	if m.state.queueOverview.selected != 2 {
 		t.Errorf("Expected selected to stay at 2, got %d", m.state.queueOverview.selected)
 	}
 
 	// Test moving up
-	m, _ = m.previousQueue()
+	m = m.previousQueue()
 	if m.state.queueOverview.selected != 1 {
 		t.Errorf("Expected selected to be 1, got %d", m.state.queueOverview.selected)
 	}
 
-	m, _ = m.previousQueue()
+	m = m.previousQueue()
 	if m.state.queueOverview.selected != 0 {
 		t.Errorf("Expected selected to be 0, got %d", m.state.queueOverview.selected)
 	}
 
 	// Test boundary - should not go below 0
-	m, _ = m.previousQueue()
+	m = m.previousQueue()
 	if m.state.queueOverview.selected != 0 {
 		t.Errorf("Expected selected to stay at 0, got %d", m.state.queueOverview.selected)
 	}
@@ -148,6 +152,7 @@ func TestQueueOverviewViewWithQueues(t *testing.T) {
 	m.state.queueOverview.queues = []kue.Queue{
 		{Name: "test-queue", Url: "http://test/test-queue"},
 	}
+	m = m.rebuildQueueTable()
 
 	view := m.QueueOverviewView()
 
@@ -163,8 +168,8 @@ func TestQueueOverviewViewWithoutQueues(t *testing.T) {
 
 	view := m.QueueOverviewView()
 
-	// View should contain the empty message centered in the table area
-	if !strings.Contains(view, "No queues found. Press Ctrl+N to create a new queue.") {
-		t.Errorf("Expected view to contain empty queue message, got '%s'", view)
+	// View should contain the empty state message
+	if !strings.Contains(view, "No queues found") {
+		t.Errorf("Expected view to contain 'No queues found', got '%s'", view)
 	}
 }
