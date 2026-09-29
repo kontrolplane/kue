@@ -1,26 +1,22 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/key"
+	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/lipgloss/v2"
+
+	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
-var errNoPageSelected = "No page selected"
+var errNoPageSelected = "no page selected"
 
 func (m model) ErrorView() string {
-	return m.error
-}
-
-func (m model) ErrorUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
-		}
+	text := styles.CleanBlock(m.error)
+	width := min(80, dialogTextWidth(), lipgloss.Width(text))
+	lines := strings.Split(styles.Fg(styles.ToneBody).Width(width).Render(text), "\n")
+	// Room for the heading, the hint below and the card's edges.
+	if room := max(1, contentHeight-6); len(lines) > room {
+		lines = append(lines[:room-1], styles.Faint("…"))
 	}
-	return m, cmd
+	return dialog("error", styles.ToneDanger, strings.Join(lines, "\n"), "", styles.Faint("press any key to continue"))
 }

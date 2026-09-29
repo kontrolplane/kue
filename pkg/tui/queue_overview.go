@@ -3,13 +3,11 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
-	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
@@ -18,272 +16,224 @@ import (
 type queueOverviewState struct {
 	selected      int
 	queues        []kue.Queue
-	table         table.Model
-	selectedItems map[int]bool // tracks which items are selected for bulk operations
+	loaded        bool
+	table         dataTable
+	selectedItems map[string]bool // queue urls selected for bulk operations
 	filtering     bool
 	filterInput   textinput.Model
 	filterText    string
 }
 
-// Queue table column definitions.
-var columnMap = map[int]string{
-	0: "queue name",
-	1: "type",
-	2: "available",
-	3: "not visible",
-	4: "delayed",
-	5: "visibility",
-	6: "retention",
-	7: "last updated",
+var queueOverviewColumns = []column{
+	{title: "queue", width: 36, grow: 1, min: 16},
+	{title: "type", width: 14},
+	{title: "available", width: 10, right: true},
+	{title: "in flight", width: 10, right: true},
+	{title: "delayed", width: 8, right: true, drop: 2},
+	{title: "visibility", width: 10, right: true, drop: 3},
+	{title: "retention", width: 9, right: true, drop: 1},
+	{title: "modified", width: 12, right: true},
 }
 
-var queueOverviewColumns []table.Column = []table.Column{
-	{
-		Title: columnMap[0], Width: 40,
-	},
-	{
-		Title: columnMap[1], Width: 10,
-	},
-	{
-		Title: columnMap[2], Width: 10,
-	},
-	{
-		Title: columnMap[3], Width: 10,
-	},
-	{
-		Title: columnMap[4], Width: 10,
-	},
-	{
-		Title: columnMap[5], Width: 10,
-	},
-	{
-		Title: columnMap[6], Width: 10,
-	},
-	{
-		Title: columnMap[7], Width: 20,
-	},
-}
-
-func (m model) QueueOverviewSwitchPage(msg tea.Msg) (model, tea.Cmd) {
-	m.error = ""
-	m = m.SwitchPage(queueOverview)
-	m.loading = true
-	m.loadingMsg = "Loading queues..."
-	m.state.queueOverview.selectedItems = make(map[int]bool)
-	m.state.queueOverview.filtering = false
-	m.state.queueOverview.filterText = ""
-	m.state.queueOverview.filterInput = initFilterInput()
-	return m, commands.LoadQueues(m.context, m.client)
-}
-
-func initFilterInput() textinput.Model {
-	ti := textinput.New()
-	ti.Placeholder = "Type to filter..."
-	ti.CharLimit = 50
-	ti.Width = 30
-	return ti
+func queueMatches(q kue.Queue, filter string) bool {
+	return strings.Contains(strings.ToLower(q.Name), strings.ToLower(filter))
 }
 
 func (m model) getFilteredQueues() []kue.Queue {
-	if m.state.queueOverview.filterText == "" {
-		return m.state.queueOverview.queues
+	o := m.state.queueOverview
+	return filterBy(o.queues, o.filterText, queueMatches)
+}
+
+// queueType renders whether a queue is standard or fifo, and marks the dead-letter queues.
+func queueType(queues []kue.Queue, q kue.Queue) cell {
+	c := text("standard", styles.ToneBody)
+	if q.FifoQueue == "true" {
+		c = text("fifo", styles.ToneBody)
 	}
-	filter := strings.ToLower(m.state.queueOverview.filterText)
-	var filtered []kue.Queue
-	for _, q := range m.state.queueOverview.queues {
-		if strings.Contains(strings.ToLower(q.Name), filter) {
-			filtered = append(filtered, q)
+	if isDeadLetter(queues, q) {
+		c = append(c, styles.S(" dlq", styles.ToneWarning))
+	}
+	return c
+}
+
+func (m model) updateQueueOverviewTable() model {
+	o := &m.state.queueOverview
+	var rows []tableRow
+	for _, q := range m.getFilteredQueues() {
+		name := cell{styles.B(q.Name, styles.ToneText)}
+		if o.selectedItems[q.Url] {
+			name = cell{styles.S("● ", styles.ToneAccent), styles.B(q.Name, styles.ToneText)}
+		}
+		rows = append(rows, tableRow{
+			name,
+			queueType(o.queues, q),
+			tableCount(atoi(q.ApproximateNumberOfMessages), styles.ToneText),
+			tableCount(atoi(q.ApproximateNumberOfMessagesNotVisible), styles.ToneInfo),
+			tableCount(atoi(q.ApproximateNumberOfMessagesDelayed), styles.ToneBody),
+			text(formatSeconds(q.VisibilityTimeout), styles.ToneMuted),
+			text(formatSeconds(q.MessageRetentionPeriod), styles.ToneMuted),
+			lastActivity(parseTime(q.LastModified)),
+		})
+	}
+	o.table.empty = "no queues yet, press ctrl+n to create one"
+	if len(o.queues) > 0 {
+		o.table.empty = "no queues match the filter"
+	}
+	o.selected = setRows(&o.table, rows, o.selected)
+	return m
+}
+
+func (m model) currentQueue() (kue.Queue, bool) {
+	queues := m.getFilteredQueues()
+	if len(queues) == 0 {
+		return kue.Queue{}, false
+	}
+	return queues[m.state.queueOverview.selected], true
+}
+
+func (m model) toggleQueueSelection() model {
+	if q, ok := m.currentQueue(); ok {
+		toggle(m.state.queueOverview.selectedItems, q.Url)
+	}
+	return m.updateQueueOverviewTable()
+}
+
+// getSelectedQueues returns the names of the selected queues the filter shows, or the queue under
+// the cursor when nothing is selected. hidden counts the selected queues the filter hides, which
+// an action on the selection leaves alone.
+func (m model) getSelectedQueues() (names []string, hidden int) {
+	o := m.state.queueOverview
+	filtered := m.getFilteredQueues()
+	urls := selectedOr(o.selectedItems, filtered, func(q kue.Queue) string { return q.Url }, m.currentQueue)
+	for _, q := range filtered {
+		for _, url := range urls {
+			if q.Url == url {
+				names = append(names, q.Name)
+			}
 		}
 	}
-	return filtered
+	if len(o.selectedItems) > 0 {
+		hidden = len(o.selectedItems) - len(names)
+	}
+	return names, hidden
 }
 
-func (m model) NoQueuesFound() bool {
-	return m.QueuesCount() == 0
+// clearFilterOrSelection clears the filter, or else the selection, and reports whether there
+// was either to clear.
+func (m model) clearFilterOrSelection() (model, bool) {
+	o := &m.state.queueOverview
+	switch {
+	case o.filterText != "":
+		o.filterText = ""
+		o.filterInput.SetValue("")
+		o.selected = 0
+	case len(o.selectedItems) > 0:
+		o.selectedItems = make(map[string]bool)
+	default:
+		return m, false
+	}
+	return m.updateQueueOverviewTable(), true
 }
 
-func (m model) QueuesCount() int {
-	return len(m.state.queueOverview.queues)
+// QueueOverviewSwitchPage opens the queue overview and loads it.
+func (m model) QueueOverviewSwitchPage() (model, tea.Cmd) {
+	m.error = ""
+	m = m.SwitchPage(queueOverview)
+	m.loading = !m.state.queueOverview.loaded
+	m.loadingMsg = "loading queues…"
+	return m, commands.LoadQueues(m.context, m.client)
 }
 
-func initQueueOverviewTable(height int) table.Model {
-	if height < minTableHeight {
-		height = minTableHeight
-	}
-
-	t := table.New(
-		table.WithColumns(queueOverviewColumns),
-		table.WithFocused(true),
-		table.WithHeight(height),
-	)
-
-	t.SetStyles(styles.TableStyles())
-
-	return t
-}
-
-func (m model) nextQueue() (model, tea.Cmd) {
-	filteredQueues := m.getFilteredQueues()
-	if m.state.queueOverview.selected < len(filteredQueues)-1 {
-		m.state.queueOverview.selected++
-	}
-	return m, nil
-}
-
-func (m model) previousQueue() (model, tea.Cmd) {
-	if m.state.queueOverview.selected > 0 {
-		m.state.queueOverview.selected--
-	}
-	return m, nil
-}
-
-func (m model) toggleQueueSelection() (model, tea.Cmd) {
-	if len(m.state.queueOverview.queues) == 0 {
-		return m, nil
-	}
-	idx := m.state.queueOverview.selected
-	if m.state.queueOverview.selectedItems == nil {
-		m.state.queueOverview.selectedItems = make(map[int]bool)
-	}
-	if m.state.queueOverview.selectedItems[idx] {
-		delete(m.state.queueOverview.selectedItems, idx)
-	} else {
-		m.state.queueOverview.selectedItems[idx] = true
-	}
-	return m, nil
-}
-
-func (m model) getSelectedQueues() []kue.Queue {
-	var queues []kue.Queue
-	for idx := range m.state.queueOverview.selectedItems {
-		if idx < len(m.state.queueOverview.queues) {
-			queues = append(queues, m.state.queueOverview.queues[idx])
-		}
-	}
-	return queues
+// QueueOverviewGoBack returns to the queue overview as it was left and refreshes it in the background.
+func (m model) QueueOverviewGoBack() (model, tea.Cmd) {
+	m.error = ""
+	return m.SwitchPage(queueOverview), commands.LoadQueues(m.context, m.client)
 }
 
 func (m model) QueueOverviewUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
+	o := &m.state.queueOverview
 
-	// Handle filter mode
-	if m.state.queueOverview.filtering {
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			switch msg.Type {
-			case tea.KeyEsc:
-				m.state.queueOverview.filtering = false
-				m.state.queueOverview.filterInput.Blur()
-				return m, nil
-			case tea.KeyEnter:
-				m.state.queueOverview.filtering = false
-				m.state.queueOverview.filterText = m.state.queueOverview.filterInput.Value()
-				m.state.queueOverview.filterInput.Blur()
-				m.state.queueOverview.selected = 0
+	if o.filtering {
+		if msg, ok := msg.(tea.KeyPressMsg); ok {
+			switch {
+			case key.Matches(msg, m.keys.Back):
+				o.filtering = false
+				o.filterText = ""
+				o.filterInput.SetValue("")
+				o.filterInput.Blur()
+				return m.updateQueueOverviewTable(), nil
+			case key.Matches(msg, m.keys.View):
+				o.filtering = false
+				o.filterInput.Blur()
 				return m, nil
 			}
 		}
-		m.state.queueOverview.filterInput, cmd = m.state.queueOverview.filterInput.Update(msg)
-		// Live filtering as user types
-		m.state.queueOverview.filterText = m.state.queueOverview.filterInput.Value()
-		m.state.queueOverview.selected = 0
-		return m, cmd
+		o.filterInput, cmd = o.filterInput.Update(msg)
+		if o.filterText != o.filterInput.Value() {
+			o.filterText = o.filterInput.Value()
+			o.selected = 0
+		}
+		return m.updateQueueOverviewTable(), cmd
 	}
 
-	switch msg := msg.(type) {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return m, nil
+	}
 
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.keys.Filter):
-			m.state.queueOverview.filtering = true
-			m.state.queueOverview.filterInput.Focus()
-			return m, textinput.Blink
-		case key.Matches(msg, m.keys.Down):
-			m, cmd = m.nextQueue()
-		case key.Matches(msg, m.keys.Up):
-			m, cmd = m.previousQueue()
-		case key.Matches(msg, m.keys.Select):
-			m, cmd = m.toggleQueueSelection()
-		case key.Matches(msg, m.keys.View):
-			filteredQueues := m.getFilteredQueues()
-			if len(filteredQueues) > 0 {
-				selected := m.state.queueOverview.selected
-				m.state.queueDetails.queue = filteredQueues[selected]
-				return m.QueueDetailsSwitchPage(msg)
-			}
-		case key.Matches(msg, m.keys.Create):
-			return m.QueueCreateSwitchPage(msg)
-		case key.Matches(msg, m.keys.Purge):
-			filteredQueues := m.getFilteredQueues()
-			if len(filteredQueues) > 0 {
-				selected := m.state.queueOverview.selected
-				m.state.queuePurge.queue = filteredQueues[selected]
-				m.state.queuePurge.fromOverview = true
-				return m.QueuePurgeSwitchPage(msg)
-			}
-		case key.Matches(msg, m.keys.Redrive):
-			filteredQueues := m.getFilteredQueues()
-			if len(filteredQueues) > 0 {
-				selected := m.state.queueOverview.selected
-				queue := filteredQueues[selected]
-				sourceArn := m.findSourceQueueArn(queue.Arn)
-				if sourceArn != "" {
-					m.state.queueRedrive.queue = queue
-					m.state.queueRedrive.destinationArn = sourceArn
-					m.state.queueRedrive.fromOverview = true
-					return m.QueueRedriveSwitchPage(msg)
-				}
-				m.error = "This queue is not a dead-letter queue"
-			}
-		case key.Matches(msg, m.keys.Delete):
-			filteredQueues := m.getFilteredQueues()
-			if len(filteredQueues) > 0 {
-				// If items are selected, delete selected items; otherwise delete current item
-				if len(m.state.queueOverview.selectedItems) > 0 {
-					m.state.queueDelete.queues = m.getSelectedQueues()
-				} else {
-					selected := m.state.queueOverview.selected
-					m.state.queueDelete.queues = []kue.Queue{filteredQueues[selected]}
-				}
-				return m.QueueDeleteSwitchPage(msg)
-			}
-		case key.Matches(msg, m.keys.Quit):
-			// If filtering, clear filter
-			if m.state.queueOverview.filterText != "" {
-				m.state.queueOverview.filterText = ""
-				m.state.queueOverview.filterInput.SetValue("")
-				m.state.queueOverview.selected = 0
-				return m, nil
-			}
-			// If items are selected, clear selection instead of quitting
-			if len(m.state.queueOverview.selectedItems) > 0 {
-				m.state.queueOverview.selectedItems = make(map[int]bool)
-				return m, nil
-			}
-			return m, tea.Quit
-		default:
-			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+	switch {
+	case key.Matches(keyMsg, m.keys.Filter):
+		o.filtering = true
+		return m, o.filterInput.Focus()
+	case key.Matches(keyMsg, m.keys.Select):
+		return m.toggleQueueSelection(), nil
+	case key.Matches(keyMsg, m.keys.Refresh):
+		return m, commands.LoadQueues(m.context, m.client)
+	case key.Matches(keyMsg, m.keys.View):
+		if q, ok := m.currentQueue(); ok {
+			m.state.queueDetails.queue = q
+			return m.QueueDetailsSwitchPage()
 		}
+	case key.Matches(keyMsg, m.keys.Create):
+		return m.QueueCreateSwitchPage()
+	case key.Matches(keyMsg, m.keys.Purge):
+		if q, ok := m.currentQueue(); ok {
+			m.state.queuePurge.queue = q
+			m.state.queuePurge.fromOverview = true
+			return m.QueuePurgeSwitchPage()
+		}
+	case key.Matches(keyMsg, m.keys.Redrive):
+		if q, ok := m.currentQueue(); ok {
+			return m.openRedrive(q, true)
+		}
+	case key.Matches(keyMsg, m.keys.Delete):
+		names, hidden := m.getSelectedQueues()
+		if len(names) == 0 {
+			if hidden > 0 {
+				return m.setStatus("the selected queues are hidden by the filter", styles.ToneWarning)
+			}
+			return m, nil
+		}
+		m.state.queueDelete.queues = names
+		m.state.queueDelete.hidden = hidden
+		return m.QueueDeleteSwitchPage()
+	case key.Matches(keyMsg, m.keys.Back):
+		m, _ = m.clearFilterOrSelection()
+		return m, nil
+	case key.Matches(keyMsg, m.keys.Quit):
+		if m, ok := m.clearFilterOrSelection(); ok {
+			return m, nil
+		}
+		return m, tea.Quit
 	default:
-		m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+		o.table = o.table.Update(keyMsg)
+		o.selected = o.table.Cursor()
 	}
 
 	return m, cmd
 }
 
 func (m model) QueueOverviewView() string {
-	// Rebuild table rows to reflect current selection state
-	m = m.updateQueueOverviewTableFiltered()
-	tableView := m.state.queueOverview.table.View()
-
-	filteredQueues := m.getFilteredQueues()
-	if len(filteredQueues) == 0 {
-		emptyMsg := lipgloss.NewStyle().
-			Foreground(styles.MediumGray).
-			Render("No queues found. Press Ctrl+N to create a new queue.")
-
-		return tableView + "\n\n" + emptyMsg
-	}
-
-	return tableView
+	return m.state.queueOverview.table.View()
 }

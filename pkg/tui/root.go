@@ -2,16 +2,24 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
+	"unicode"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/kontrolplane/kue/pkg/client"
-
-	tea "github.com/charmbracelet/bubbletea"
 	keys "github.com/kontrolplane/kue/pkg/keys"
+	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/messages"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
@@ -20,69 +28,193 @@ import (
 func NewModel(
 	projectName string,
 	programName string,
-) (tea.Model, error) {
+	sqsClient *sqs.Client,
+	awsInfo client.AWSInfo,
+) tea.Model {
+	m := newModel(projectName, programName)
+	m.client = sqsClient
+	m.awsInfo = awsInfo
+	return m
+}
 
-	ctx := context.Background()
-
-	sqsClient, awsInfo, err := client.CreateSqsClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't create SQS client: %w", err)
-	}
-
-	queueOverviewTable := initQueueOverviewTable(defaultTableHeight)
-
-	m := model{
+func newModel(projectName, programName string) model {
+	return model{
 		projectName: projectName,
 		programName: programName,
 		page:        queueOverview,
-		context:     ctx,
-		client:      sqsClient,
-		awsInfo:     awsInfo,
+		context:     context.Background(),
 		loading:     true,
-		loadingMsg:  "Loading queues...",
-
-		keys: keys.Keys,
-
+		loadingMsg:  "loading queues…",
+		spinner:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+		keys:        keys.Keys,
 		state: state{
 			queueOverview: queueOverviewState{
-				selected:      0,
-				table:         queueOverviewTable,
-				queues:        nil,
-				selectedItems: make(map[int]bool),
-				filterInput:   initFilterInput(),
+				table:         newDataTable(queueOverviewColumns, contentWidth-4, contentHeight-tableHeaderRows),
+				selectedItems: make(map[string]bool),
+				filterInput:   initFilterInput("filter by name…"),
 			},
 			queueDetails: queueDetailsState{
-				selected:        0,
-				messages:        nil,
-				attributesTable: "",
-				selectedItems:   make(map[int]bool),
-				filterInput:     initMessageFilterInput(),
-			},
-			queueDelete: queueDeleteState{
-				selected: 0,
+				selectedItems: make(map[string]bool),
+				filterInput:   initFilterInput("filter by id or body…"),
 			},
 		},
 	}
-
-	return m, nil
 }
 
 func (m model) Init() tea.Cmd {
-	return commands.LoadQueues(m.context, m.client)
+	return tea.Batch(commands.LoadQueues(m.context, m.client), m.spinner.Tick)
+}
+
+// textInputActive reports whether keystrokes are currently going into a text field,
+// in which case single character shortcuts must not trigger.
+func (m model) textInputActive() bool {
+	switch m.page {
+	case queueCreate, queueMessageCreate, queueDelete:
+		return true
+	case queueOverview:
+		return m.state.queueOverview.filtering
+	case queueDetails:
+		return m.state.queueDetails.filtering
+	}
+	return false
+}
+
+// inQueue reports whether the current page shows the queue held in the details state, so
+// results loaded for that queue still belong on screen.
+func (m model) inQueue() bool {
+	switch m.page {
+	case queueDetails, queueMessageDetails, queueMessageCreate, queueMessageDelete:
+		return true
+	case queuePurge:
+		return !m.state.queuePurge.fromOverview
+	case queueRedrive:
+		return !m.state.queueRedrive.fromOverview
+	}
+	return false
+}
+
+// keepSpinning restarts the loading spinner when a load began after it last stopped.
+func (m model) keepSpinning() (model, tea.Cmd) {
+	if !m.loading || m.spinning {
+		return m, nil
+	}
+	m.spinning = true
+	return m, m.spinner.Tick
+}
+
+func (m model) scheduleRefresh() (model, tea.Cmd) {
+	m.refreshGen++
+	return m, commands.ScheduleRefresh(m.refreshGen)
+}
+
+// setStatus shows text in the footer for a few seconds, in the success, warning or danger tone.
+func (m model) setStatus(text string, tone styles.Tone) (model, tea.Cmd) {
+	m.statusGen++
+	m.statusMsg = text
+	m.statusTone = tone
+	return m, commands.ClearStatusAfter(3*time.Second, m.statusGen)
+}
+
+// withStatus is setStatus for a handler that already has a command to return.
+func (m model) withStatus(cmd tea.Cmd, text string, tone styles.Tone) (model, tea.Cmd) {
+	m, status := m.setStatus(text, tone)
+	return m, tea.Batch(cmd, status)
+}
+
+// finish ends a create, delete, purge or send once its result is in: it stops the spinner,
+// navigates with back, and reports done in the footer, or failed with the error in a dialog.
+func (m model) finish(back func(model) (model, tea.Cmd), done, failed string, err error) (model, tea.Cmd) {
+	m.busy, m.loading = false, false
+	m, cmd := back(m)
+	if err != nil {
+		m.error = fmt.Sprintf("%s: %s", failed, err)
+		return m, cmd
+	}
+	return m.withStatus(cmd, done, styles.ToneSuccess)
+}
+
+// bulkResult describes the outcome of deleting items: what succeeded, and what to say when some
+// or all of them failed.
+func bulkResult(noun string, total int, deleted []string) (done, failed string) {
+	label := func(names []string) string {
+		if len(names) == 1 {
+			return noun + " " + names[0]
+		}
+		return plural(len(names), noun)
+	}
+	done = "deleted " + label(deleted)
+	if len(deleted) == 0 {
+		return done, "could not delete " + plural(total, noun)
+	}
+	return done, fmt.Sprintf("deleted %d of %s, the others failed", len(deleted), plural(total, noun))
+}
+
+// loadError reports a failed load. Data already on screen stays there with the error in the
+// footer, so a refresh failing every so often does not keep raising a dialog.
+func (m model) loadError(what string, err error, onScreen bool) (model, tea.Cmd) {
+	if onScreen {
+		return m.setStatus(fmt.Sprintf("%s: %s", what, err), styles.ToneDanger)
+	}
+	m.error = fmt.Sprintf("%s: %s", what, err)
+	return m, nil
+}
+
+// queueNotFound reports whether err says the queue does not exist.
+func queueNotFound(err error) bool {
+	var notFound *types.QueueDoesNotExist
+	return errors.As(err, &notFound)
+}
+
+// queueGone leaves a queue that was deleted elsewhere.
+func (m model) queueGone(name string) (model, tea.Cmd) {
+	m.loading = false
+	o := &m.state.queueOverview
+	o.queues = deleteNames(o.queues, []string{name}, func(q kue.Queue) string { return q.Name })
+	m = m.updateQueueOverviewTable()
+	m, cmd := m.QueueOverviewGoBack()
+	return m.withStatus(cmd, fmt.Sprintf("queue %s no longer exists", name), styles.ToneDanger)
+}
+
+// hasControlChars reports whether s holds control characters other than line breaks and tabs.
+func hasControlChars(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool {
+		return unicode.IsControl(r) && r != '\n' && r != '\t' && r != '\r'
+	})
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m = m.resizeTables()
+		setLayout(msg.Width, msg.Height)
+		m = m.resize()
 
-	case tea.KeyMsg:
-		if key.Matches(msg, m.keys.Help) {
+	case spinner.TickMsg:
+		if !m.loading {
+			m.spinning = false
+			return m, nil
+		}
+		m.spinning = true
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
+	case tea.KeyPressMsg:
+		if key.Matches(msg, m.keys.ForceQuit) {
+			return m, tea.Quit
+		}
+		if m.busy || m.tooSmall() {
+			return m, nil
+		}
+		if m.error != "" {
+			m.error = ""
+			return m, nil
+		}
+		if !m.textInputActive() && key.Matches(msg, m.keys.Help) {
 			m.showHelp = !m.showHelp
 			return m, nil
 		}
@@ -90,180 +222,191 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = false
 			return m, nil
 		}
+		if !key.Matches(msg, m.keys.Back) {
+			m.armed = false
+		}
+		if !m.textInputActive() && m.refreshes() && key.Matches(msg, m.keys.Pause) {
+			return m.togglePause()
+		}
+
+	case messages.ClockTickMsg:
+		m.clocking = false
+		return m.keepClock()
 
 	case messages.QueuesLoadedMsg:
-		m.loading = false
-		m.loadingMsg = ""
+		o := &m.state.queueOverview
+		if m.page == queueOverview {
+			m.loading = false
+		}
 		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error loading queues: %v", msg.Err)
-		} else {
-			m.error = ""
-			m.state.queueOverview.queues = msg.Queues
-			m = m.updateQueueOverviewTable()
 			if m.page == queueOverview {
-				cmds = append(cmds, commands.ScheduleRefresh("queueOverview"))
+				m, cmd = m.loadError("could not load queues", msg.Err, o.loaded)
+				cmds = append(cmds, cmd)
 			}
+		} else {
+			prev, ok := m.currentQueue()
+			o.queues = msg.Queues
+			o.loaded = true
+			if m.page == queueOverview {
+				m.refreshedAt = time.Now()
+			}
+			prune(o.selectedItems, o.queues, func(q kue.Queue) string { return q.Url })
+			if ok {
+				o.selected = follow(m.getFilteredQueues(), o.selected, func(q kue.Queue) bool { return q.Url == prev.Url })
+			}
+			m = m.updateQueueOverviewTable()
+		}
+		if m.page == queueOverview {
+			m, cmd = m.scheduleRefresh()
+			cmds = append(cmds, cmd)
 		}
 
 	case messages.QueueAttributesLoadedMsg:
-		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error fetching queue attributes: %v", msg.Err)
-		} else {
-			m.state.queueDetails.queue = msg.Queue
-			m.state.queueDetails.attributesTable = renderAttributesTable(msg.Queue)
+		d := &m.state.queueDetails
+		if msg.Url != d.queue.Url || !m.inQueue() {
+			break
+		}
+		if m.page == queueDetails {
+			m.loading = false
+		}
+		switch {
+		case queueNotFound(msg.Err) && !m.busy:
+			return m.queueGone(d.queue.Name)
+		case msg.Err != nil:
+			m, cmd = m.loadError("could not load queue "+d.queue.Name, msg.Err, d.attributesLoaded)
+			cmds = append(cmds, cmd)
+		default:
+			d.queue = msg.Queue
+			d.attributesLoaded = true
+			if m.page == queueDetails {
+				m.refreshedAt = time.Now()
+			}
 		}
 
 	case messages.MessagesLoadedMsg:
-		m.loading = false
-		m.loadingMsg = ""
+		d := &m.state.queueDetails
+		if msg.Url != d.queue.Url || !m.inQueue() {
+			break
+		}
 		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error fetching messages: %v", msg.Err)
-		} else {
-			m.state.queueDetails.messages = msg.Messages
-			m = m.updateMessagesTable()
-			if m.page == queueDetails {
-				cmds = append(cmds, commands.ScheduleRefresh("queueDetails"))
+			if !queueNotFound(msg.Err) {
+				m, cmd = m.loadError("could not load messages", msg.Err, d.messagesLoaded)
+				cmds = append(cmds, cmd)
 			}
+		} else {
+			prev, ok := m.currentMessage()
+			d.messages = msg.Messages
+			d.messagesLoaded = true
+			prune(d.selectedItems, d.messages, func(msg kue.Message) string { return msg.MessageID })
+			if ok {
+				d.selected = follow(m.getFilteredMessages(), d.selected, func(msg kue.Message) bool { return msg.MessageID == prev.MessageID })
+			}
+			m = m.updateMessagesTable()
+		}
+		if m.page == queueDetails {
+			m, cmd = m.scheduleRefresh()
+			cmds = append(cmds, cmd)
 		}
 
 	case messages.QueueCreatedMsg:
-		m.loading = false
-		m.loadingMsg = ""
+		m.busy, m.loading = false, false
 		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error creating queue: %v", msg.Err)
+			return m.reopenQueueCreate(fmt.Sprintf("could not create queue: %s", msg.Err))
 		}
-		m = m.SwitchPage(queueOverview)
-		cmds = append(cmds, commands.LoadQueues(m.context, m.client))
+		m, cmd = m.QueueOverviewGoBack()
+		return m.withStatus(cmd, "created queue "+msg.Name, styles.ToneSuccess)
 
-	case messages.QueueDeletedMsg:
-		m.loading = false
-		m.loadingMsg = ""
-		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error deleting queue: %v", msg.Err)
+	case messages.QueuesDeletedMsg:
+		o := &m.state.queueOverview
+		for _, q := range o.queues {
+			if slices.Contains(msg.Names, q.Name) {
+				delete(o.selectedItems, q.Url)
+			}
 		}
-		m.state.queueDelete.selected = 0
-		m.state.queueOverview.selectedItems = make(map[int]bool) // Clear selection after deletion
-		m = m.SwitchPage(queueOverview)
-		cmds = append(cmds, commands.LoadQueues(m.context, m.client))
+		o.queues = deleteNames(o.queues, msg.Names, func(q kue.Queue) string { return q.Name })
+		m = m.updateQueueOverviewTable()
+		done, failed := bulkResult("queue", len(m.state.queueDelete.queues), msg.Names)
+		return m.finish(model.QueueOverviewGoBack, done, failed, msg.Err)
 
-	case messages.MessageDeletedMsg:
-		m.loading = false
-		m.loadingMsg = ""
-		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error deleting message: %v", msg.Err)
-		} else {
-			queueUrl := m.state.queueDetails.queue.Url
-			if m.page != queueDetails {
-				m = m.SwitchPage(queueDetails)
-			}
-			m.state.queueDetails.selectedItems = make(map[int]bool) // Clear selection after deletion
-			if m.state.queueDetails.selected >= len(m.state.queueDetails.messages)-1 && m.state.queueDetails.selected > 0 {
-				m.state.queueDetails.selected--
-			}
-			cmds = append(cmds, tea.Batch(
-				commands.LoadQueueAttributes(m.context, m.client, queueUrl),
-				commands.LoadMessages(m.context, m.client, queueUrl, 10),
-			))
+	case messages.MessagesDeletedMsg:
+		d := &m.state.queueDetails
+		for _, id := range msg.MessageIDs {
+			delete(d.selectedItems, id)
 		}
+		d.messages = deleteNames(d.messages, msg.MessageIDs, func(msg kue.Message) string { return msg.MessageID })
+		m = m.updateMessagesTable()
+		n, total := len(msg.MessageIDs), len(m.state.queueMessageDelete.messages)
+		done := fmt.Sprintf("deleted %s from %s", plural(n, "message"), d.queue.Name)
+		failed := "could not delete " + plural(total, "message")
+		if n > 0 {
+			failed = fmt.Sprintf("deleted %d of %s, the others failed", n, plural(total, "message"))
+		}
+		return m.finish(model.QueueDetailsReload, done, failed, msg.Err)
 
 	case messages.MessageCreatedMsg:
-		m.loading = false
-		m.loadingMsg = ""
+		m.busy, m.loading = false, false
 		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error sending message: %v", msg.Err)
-		} else {
-			queueUrl := m.state.queueMessageCreate.queueUrl
-			m = m.SwitchPage(queueDetails)
-			cmds = append(cmds, tea.Batch(
-				commands.LoadQueueAttributes(m.context, m.client, queueUrl),
-				commands.LoadMessages(m.context, m.client, queueUrl, 10),
-			))
+			m.error = fmt.Sprintf("could not send message: %s", msg.Err)
+			return m, nil
 		}
-
-	case messages.QueueRedriveStartedMsg:
-		m.loading = false
-		m.loadingMsg = ""
-		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error starting redrive: %v", msg.Err)
-			m.state.queueRedrive.inProgress = false
-		} else {
-			m.state.queueRedrive.taskHandle = msg.TaskHandle
-			m.state.queueRedrive.inProgress = true
-			cmds = append(cmds, commands.ScheduleRedrivePoll(
-				3*time.Second,
-				m.context,
-				m.client,
-				m.state.queueRedrive.queue.Arn,
-			))
-		}
-
-	case messages.QueueRedriveStatusMsg:
-		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error polling redrive status: %v", msg.Err)
-		} else {
-			m.state.queueRedrive.tasks = msg.Tasks
-			stillRunning := false
-			for _, task := range msg.Tasks {
-				if task.Status == "RUNNING" {
-					stillRunning = true
-					break
-				}
-			}
-			if stillRunning && m.page == queueRedrive {
-				cmds = append(cmds, commands.ScheduleRedrivePoll(
-					3*time.Second,
-					m.context,
-					m.client,
-					m.state.queueRedrive.queue.Arn,
-				))
-			}
-		}
+		m, cmd = m.QueueDetailsReload()
+		return m.withStatus(cmd, "sent message to "+msg.Queue, styles.ToneSuccess)
 
 	case messages.QueuePurgedMsg:
-		m.loading = false
-		m.loadingMsg = ""
+		return m.finish(model.queuePurgeFinished, "purged "+msg.Queue, "could not purge "+msg.Queue, msg.Err)
+
+	case messages.QueueRedriveStartedMsg:
+		m.busy, m.loading = false, false
+		r := &m.state.queueRedrive
 		if msg.Err != nil {
-			m.error = fmt.Sprintf("Error purging queue: %v", msg.Err)
-		} else if m.state.queuePurge.fromOverview {
-			m = m.SwitchPage(queueOverview)
-			cmds = append(cmds, commands.LoadQueues(m.context, m.client))
+			r.inProgress = false
+			m.error = fmt.Sprintf("could not start redrive: %s", msg.Err)
+			break
+		}
+		r.taskHandle = msg.TaskHandle
+		r.inProgress = true
+		cmds = append(cmds, commands.ScheduleRedrivePoll(0, m.context, m.client, r.queue.Arn))
+
+	case messages.QueueRedriveStatusMsg:
+		r := &m.state.queueRedrive
+		if m.page != queueRedrive || !r.inProgress {
+			break
+		}
+		if msg.Err != nil {
+			m, cmd = m.setStatus(fmt.Sprintf("could not poll redrive status: %s", msg.Err), styles.ToneDanger)
+			cmds = append(cmds, cmd)
 		} else {
-			queueUrl := m.state.queuePurge.queue.Url
-			m = m.SwitchPage(queueDetails)
-			cmds = append(cmds, tea.Batch(
-				commands.LoadQueueAttributes(m.context, m.client, queueUrl),
-				commands.LoadMessages(m.context, m.client, queueUrl, 10),
-			))
+			r.tasks = msg.Tasks
+		}
+		if msg.Err != nil || r.running() {
+			cmds = append(cmds, commands.ScheduleRedrivePoll(3*time.Second, m.context, m.client, r.queue.Arn))
 		}
 
 	case messages.ClipboardCopiedMsg:
 		if msg.Err != nil {
-			m.statusMsg = "Failed to copy to clipboard"
-		} else {
-			m.statusMsg = "Copied to clipboard!"
+			cmds = append(cmds, tea.SetClipboard(msg.Text))
 		}
-		cmds = append(cmds, commands.ClearStatusAfter(2*time.Second))
+		if hasControlChars(msg.Text) {
+			m, cmd = m.setStatus("copied, text contains control characters", styles.ToneWarning)
+		} else {
+			m, cmd = m.setStatus("copied to clipboard", styles.ToneSuccess)
+		}
+		cmds = append(cmds, cmd)
 
 	case messages.StatusClearMsg:
-		m.statusMsg = ""
+		if msg.Gen == m.statusGen {
+			m.statusMsg = ""
+		}
 
 	case messages.RefreshTickMsg:
-		switch msg.Page {
-		case "queueOverview":
-			if m.page == queueOverview {
-				cmds = append(cmds, commands.LoadQueues(m.context, m.client))
-			}
-		case "queueDetails":
-			if m.page == queueDetails && m.state.queueDetails.queue.Url != "" {
-				cmds = append(cmds, tea.Batch(
-					commands.LoadQueueAttributes(m.context, m.client, m.state.queueDetails.queue.Url),
-					commands.LoadMessages(m.context, m.client, m.state.queueDetails.queue.Url, 10),
-				))
-			}
+		// While paused the tick is let go, which ends the refresh loop until it resumes.
+		if msg.Gen != m.refreshGen || m.paused {
+			break
 		}
+		m, cmd = m.refreshPage()
+		cmds = append(cmds, cmd)
 	}
 
-	var cmd tea.Cmd
 	switch m.page {
 	case queueOverview:
 		m, cmd = m.QueueOverviewUpdate(msg)
@@ -284,25 +427,138 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case queueMessageCreate:
 		m, cmd = m.QueueMessageCreateUpdate(msg)
 	}
-
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
+	cmds = append(cmds, cmd)
+	m, cmd = m.keepSpinning()
+	cmds = append(cmds, cmd)
+	m, cmd = m.keepClock()
+	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
 }
 
-func (m model) View() string {
-	h := formatHeader(m.projectName, m.programName, views[m.page], m.awsInfo)
-	f := m.renderFooter()
+// refreshes reports whether the current page refreshes on its own.
+func (m model) refreshes() bool {
+	switch m.page {
+	case queueOverview, queueDetails:
+		return true
+	}
+	return false
+}
+
+// refreshPage reloads what the current page shows.
+func (m model) refreshPage() (model, tea.Cmd) {
+	switch m.page {
+	case queueOverview:
+		return m, commands.LoadQueues(m.context, m.client)
+	case queueDetails:
+		return m, commands.LoadQueueDetails(m.context, m.client, m.state.queueDetails.queue.Url)
+	}
+	return m, nil
+}
+
+// togglePause stops the refresh ticks, or starts them again with a refresh.
+func (m model) togglePause() (model, tea.Cmd) {
+	m.paused = !m.paused
+	if m.paused {
+		return m, nil
+	}
+	return m.refreshPage()
+}
+
+// clockVisible reports whether the time since the last refresh is on screen.
+func (m model) clockVisible() bool {
+	return !m.refreshedAt.IsZero() && m.refreshes() && !m.loading && m.error == "" && !m.tooSmall()
+}
+
+// keepClock ticks the time since the last refresh while it is on screen, once each time its
+// wording changes.
+func (m model) keepClock() (model, tea.Cmd) {
+	if m.clocking || !m.clockVisible() {
+		return m, nil
+	}
+	m.clocking = true
+	return m, commands.ScheduleClock(untilAgoChanges(time.Since(m.refreshedAt)))
+}
+
+// untilAgoChanges returns how long until formatAgo words an age of d differently.
+func untilAgoChanges(d time.Duration) time.Duration {
+	unit := time.Second
+	switch {
+	case d >= 24*time.Hour:
+		unit = 24 * time.Hour
+	case d >= time.Hour:
+		unit = time.Hour
+	case d >= time.Minute:
+		unit = time.Minute
+	}
+	if d < 0 {
+		return unit
+	}
+	return unit - d%unit
+}
+
+// formatRefreshed words the time since the last refresh.
+func formatRefreshed(d time.Duration) string {
+	if d < time.Second {
+		return "refreshed just now"
+	}
+	return "refreshed " + formatAgo(time.Now().Add(-d))
+}
+
+func (m model) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = true
+	v.WindowTitle = m.programName
+	v.ForegroundColor = styles.P.Text
+	if styles.Paint {
+		v.BackgroundColor = styles.P.Base
+	}
+	return v
+}
+
+// tooSmall reports whether the terminal is smaller than the layout needs.
+func (m model) tooSmall() bool {
+	return m.width > 0 && (m.width < minContentWidth+chromeWidth || m.height < minContentHeight+chromeHeight)
+}
+
+// tooSmallView asks for a larger terminal, in place of a layout that would not fit.
+func (m model) tooSmallView() string {
+	notice := lipgloss.JoinVertical(lipgloss.Center,
+		styles.Render(styles.B("terminal too small", styles.ToneWarning)),
+		styles.Muted(fmt.Sprintf("%d×%d, needs %d×%d", m.width, m.height, minContentWidth+chromeWidth, minContentHeight+chromeHeight)),
+		styles.Faint("ctrl+c to quit"),
+	)
+	return clip(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, notice), m.width, m.height)
+}
+
+func (m model) render() string {
+	if m.tooSmall() {
+		return m.tooSmallView()
+	}
+
+	c := m.content()
+	meta, foot := m.frameMeta()
+	mainView := m.renderHeader() + "\n\n" +
+		frame(styles.Render(m.breadcrumb()...), meta, foot, c) + "\n" +
+		m.renderFooter()
+
+	placed := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainView)
+	if m.width > 0 {
+		placed = clip(placed, m.width, m.height)
+	}
+	return placed
+}
+
+// content renders what the frame holds: the page, or the error, loading or help in its place.
+func (m model) content() string {
 	var c string
 
-	if m.loading {
-		c = m.loadingMsg
-		if c == "" {
-			c = "Loading..."
-		}
-	} else {
+	switch {
+	case m.error != "":
+		c = m.ErrorView()
+	case m.loading:
+		c = m.LoadingView()
+	default:
 		switch m.page {
 		case queueOverview:
 			c = m.QueueOverviewView()
@@ -327,340 +583,207 @@ func (m model) View() string {
 		}
 	}
 
-	if m.error != "" {
-		c = m.ErrorView()
-	}
-
-	fixedContent := lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Top, c)
-	bordered := styles.MainBorder.Render(fixedContent)
-	mainView := h + "\n\n" + bordered + "\n\n" + f
-
 	if m.showHelp {
-		mainView = m.renderHelpOverlay(mainView)
+		c = m.renderHelpOverlay()
 	}
 
-	return styles.ContentWrapper(m.width, m.height).Render(mainView)
+	return c
+}
+
+func (m model) LoadingView() string {
+	msg := m.loadingMsg
+	if msg == "" {
+		msg = "loading…"
+	}
+	return lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center,
+		styles.Accent(m.spinner.View())+" "+styles.Muted(truncate(styles.Clean(msg), contentWidth-4)))
+}
+
+// frameMeta returns what is set into the frame's edges: the active filter on top, the refresh
+// clock and cursor position of the visible table at the bottom.
+func (m model) frameMeta() (string, string) {
+	var filter string
+	var t *dataTable
+	switch m.page {
+	case queueOverview:
+		filter = m.state.queueOverview.filterText
+		t = &m.state.queueOverview.table
+	case queueDetails:
+		filter = m.state.queueDetails.filterText
+		t = &m.state.queueDetails.messagesTable
+	}
+	var meta string
+	if filter != "" {
+		meta = styles.Render(styles.S("filter ", styles.ToneFaint), styles.S(filter, styles.ToneText))
+	}
+	if m.loading || m.error != "" {
+		return meta, ""
+	}
+	var foot []string
+	if m.clockVisible() {
+		foot = append(foot, styles.Faint(formatRefreshed(time.Since(m.refreshedAt))))
+	}
+	if t != nil && t.position() != "" {
+		foot = append(foot, styles.Faint(t.position()))
+	}
+	return meta, strings.Join(foot, styles.Faint(" · "))
 }
 
 func (m model) renderFooter() string {
+	var status string
 	if m.statusMsg != "" {
-		statusStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
-		return statusStyle.Render(m.statusMsg)
+		switch m.statusTone {
+		case styles.ToneDanger:
+			status = styles.Render(styles.S("✗ ", styles.ToneDanger), styles.S(m.statusMsg, styles.ToneDanger))
+		case styles.ToneWarning:
+			status = styles.Render(styles.S("▲ ", styles.ToneWarning), styles.S(m.statusMsg, styles.ToneWarning))
+		default:
+			status = styles.Render(styles.S("✓ ", styles.ToneSuccess), styles.S(m.statusMsg, styles.ToneBody))
+		}
 	}
+	if w := lipgloss.Width(status); w > frameWidth/2 {
+		status = ansi.Truncate(status, frameWidth/2, "…")
+	}
+	width := frameWidth - 2 - lipgloss.Width(status) - 2
+	left := ansi.Truncate(m.renderFooterLeft(width), width, "…")
+	return " " + spread(left, status+" ", frameWidth-1)
+}
 
-	// Show filter input when filtering
-	if m.page == queueOverview && m.state.queueOverview.filtering {
-		return m.renderFilterBar(m.state.queueOverview.filterInput.View())
+// renderFooterLeft renders what the footer shows next to the status, in at most width columns.
+func (m model) renderFooterLeft(width int) string {
+	switch m.page {
+	case queueOverview:
+		o := m.state.queueOverview
+		switch {
+		case o.filtering:
+			return m.renderFilterBar(o.filterInput.View())
+		case len(o.selectedItems) > 0:
+			return m.renderSelectionInfo(len(o.selectedItems), "queue")
+		}
+	case queueDetails:
+		d := m.state.queueDetails
+		switch {
+		case d.filtering:
+			return m.renderFilterBar(d.filterInput.View())
+		case len(d.selectedItems) > 0:
+			return m.renderSelectionInfo(len(d.selectedItems), "message")
+		}
 	}
-	if m.page == queueDetails && m.state.queueDetails.filtering {
-		return m.renderFilterBar(m.state.queueDetails.filterInput.View())
-	}
-
-	// Show filter status if filter is active
-	if m.page == queueOverview && m.state.queueOverview.filterText != "" {
-		return m.renderFilterStatus(m.state.queueOverview.filterText)
-	}
-	if m.page == queueDetails && m.state.queueDetails.filterText != "" {
-		return m.renderFilterStatus(m.state.queueDetails.filterText)
-	}
-
-	// Show selection info if items are selected
-	if m.page == queueOverview && len(m.state.queueOverview.selectedItems) > 0 {
-		return m.renderSelectionInfo(len(m.state.queueOverview.selectedItems), "queue")
-	}
-	if m.page == queueDetails && len(m.state.queueDetails.selectedItems) > 0 {
-		return m.renderSelectionInfo(len(m.state.queueDetails.selectedItems), "message")
-	}
-
-	return m.renderShortHelp()
+	return m.renderShortHelp(width)
 }
 
 func (m model) renderSelectionInfo(count int, itemType string) string {
-	selectionStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
-	helpStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
-	plural := "s"
-	if count == 1 {
-		plural = ""
-	}
-	return selectionStyle.Render(fmt.Sprintf("%d %s%s selected", count, itemType, plural)) +
-		helpStyle.Render("  (ctrl+d to delete, q to clear)")
+	return styles.Render(styles.S("● ", styles.ToneAccent), styles.B(plural(count, itemType)+" selected", styles.ToneText)) +
+		"    " + hints([2]string{"ctrl+d", "delete"}, [2]string{"q", "clear"})
 }
 
 func (m model) renderFilterBar(inputView string) string {
-	labelStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
-	return labelStyle.Render("Filter: ") + inputView + "  (enter to confirm, esc to cancel)"
+	return styles.Accent("/ ") + inputView + "  " +
+		hints([2]string{"enter", "apply"}, [2]string{"esc", "clear"})
 }
 
-func (m model) renderFilterStatus(filterText string) string {
-	filterStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
-	helpStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
-	return filterStyle.Render("Filter: "+filterText) + helpStyle.Render("  (q to clear)")
+// fitHints renders the hints that fit width. Hints are dropped from the end but for the last two,
+// help and back or quit, which stay.
+func fitHints(width int, pairs ...[2]string) string {
+	pairs = slices.Clone(pairs)
+	for len(pairs) > 2 && lipgloss.Width(hints(pairs...)) > width {
+		pairs = slices.Delete(pairs, len(pairs)-3, len(pairs)-2)
+	}
+	return hints(pairs...)
 }
 
-func (m model) renderShortHelp() string {
-	helpStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
-	return helpStyle.Render("enter view • ? help • / filter • q quit")
+func hints(pairs ...[2]string) string {
+	parts := make([]string, len(pairs))
+	for i, p := range pairs {
+		parts[i] = styles.Key(p[0], p[1])
+	}
+	return strings.Join(parts, styles.Faint("  ·  "))
 }
 
-func (m model) renderHelpOverlay(background string) string {
-	helpContent := m.renderHelpContent()
+var confirmHelp = [][2]string{{"y/n", "yes/no"}, {"←/→", "choose"}, {"enter", "confirm"}, {"esc", "cancel"}}
 
-	overlay := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(styles.AccentColor).
-		Padding(1, 3).
-		Render(helpContent)
-
-	return lipgloss.Place(contentWidth+4, contentHeight+10,
-		lipgloss.Center, lipgloss.Center,
-		overlay,
-	)
+var shortHelp = map[page][][2]string{
+	queueOverview:       {{"enter", "open"}, {"ctrl+n", "new queue"}, {"ctrl+p", "purge"}, {"ctrl+r", "redrive"}, {"ctrl+d", "delete"}, {"/", "filter"}, {"p", "pause"}, {"?", "help"}, {"q", "quit"}},
+	queueDetails:        {{"enter", "open"}, {"space", "select"}, {"ctrl+n", "send"}, {"ctrl+d", "delete"}, {"ctrl+p", "purge"}, {"ctrl+r", "redrive"}, {"c", "copy arn"}, {"r", "refresh"}, {"p", "pause"}, {"/", "filter"}, {"?", "help"}, {"q", "back"}},
+	queueCreate:         {{"enter", "next"}, {"shift+tab", "previous"}, {"esc", "cancel"}},
+	queueDelete:         {{"enter", "delete"}, {"esc", "cancel"}},
+	queuePurge:          confirmHelp,
+	queueMessageDetails: {{"↑/↓", "scroll"}, {"g/G", "top/bottom"}, {"c", "copy body"}, {"ctrl+d", "delete"}, {"?", "help"}, {"q", "back"}},
+	queueMessageCreate:  {{"tab", "next field"}, {"ctrl+s", "send"}, {"esc", "cancel"}},
+	queueMessageDelete:  confirmHelp,
 }
 
-func (m model) renderHelpContent() string {
-	titleStyle := lipgloss.NewStyle().
-		Foreground(styles.AccentColor).
-		Bold(true).
-		MarginBottom(1)
+func (m model) renderShortHelp(width int) string {
+	return fitHints(width, m.shortHelp()...)
+}
 
-	keyStyle := lipgloss.NewStyle().
-		Foreground(styles.TextLight).
-		Width(15)
+func (m model) shortHelp() [][2]string {
+	switch {
+	case m.busy:
+		// Nothing cancels an action in flight, so no key is offered.
+		return nil
+	case m.error != "":
+		return [][2]string{{"any key", "dismiss"}}
+	case m.page == queueRedrive && m.state.queueRedrive.inProgress:
+		return [][2]string{{"q", "back"}}
+	case m.page == queueRedrive:
+		return confirmHelp
+	}
+	return shortHelp[m.page]
+}
 
-	descStyle := lipgloss.NewStyle().
-		Foreground(styles.MediumGray)
+// renderHelpOverlay draws the key reference in a card, as roomy as the content area allows.
+func (m model) renderHelpOverlay() string {
+	var overlay string
+	for _, fit := range []struct{ padY, padX, gap int }{{1, 4, 6}, {1, 2, 3}, {0, 2, 3}} {
+		overlay = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.P.RuleBold).
+			Padding(fit.padY, fit.padX).
+			Render(m.renderHelpContent(fit.gap))
+		if lipgloss.Width(overlay) <= contentWidth && lipgloss.Height(overlay) <= contentHeight {
+			break
+		}
+	}
+	return lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, overlay)
+}
 
+// renderHelpContent lays the help out in two columns.
+func (m model) renderHelpContent(gap int) string {
+	title := func(s string) string {
+		return styles.Fg(styles.ToneAccent).Bold(true).MarginBottom(1).Render(s)
+	}
+	keyStyle := styles.Fg(styles.ToneText).Bold(true).Width(11)
 	row := func(key, desc string) string {
-		return keyStyle.Render(key) + descStyle.Render(desc)
+		return keyStyle.Render(key) + styles.Muted(desc)
 	}
 
 	navigation := lipgloss.JoinVertical(lipgloss.Left,
-		titleStyle.Render("Navigation"),
-		row("↑/k", "move up"),
-		row("↓/j", "move down"),
-		row("←/h", "move left"),
-		row("→/l", "move right"),
-		row("enter", "view"),
+		title("navigation"),
+		row("↑/k ↓/j", "move"),
+		row("g / G", "first / last"),
+		row("pgup/pgdn", "page"),
+		row("enter", "open"),
+		row("tab/⇧tab", "next / previous field"),
+		row("y / n", "answer a dialog"),
+		row("q", "back, quit"),
+		row("esc", "back, clear filter"),
+		row("ctrl+c", "quit"),
 	)
 
 	actions := lipgloss.JoinVertical(lipgloss.Left,
-		titleStyle.Render("Actions"),
-		row("space", "toggle select"),
-		row("c", "copy to clipboard"),
-		row("ctrl+n", "create new"),
+		title("actions"),
+		row("space", "select"),
+		row("c", "copy body or arn"),
+		row("ctrl+n", "new queue, send message"),
 		row("ctrl+d", "delete"),
-		row("ctrl+p", "purge queue"),
-		row("ctrl+r", "redrive DLQ"),
+		row("ctrl+p", "purge"),
+		row("ctrl+r", "redrive dead-letter queue"),
+		row("r / p", "refresh / pause"),
 		row("/", "filter"),
-		row("q/esc", "back/quit"),
-		row("?", "toggle help"),
+		row("?", "help"),
 	)
 
-	columns := lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().MarginRight(4).Render(navigation),
-		actions,
-	)
-
-	footer := lipgloss.NewStyle().
-		Foreground(styles.DarkGray).
-		MarginTop(1).
-		Render("Press any key to close")
-
-	return lipgloss.JoinVertical(lipgloss.Center, columns, footer)
-}
-
-func (m model) resizeTables() model {
-	tableHeight := m.getTableHeight()
-	cols := m.state.queueOverview.table.Columns()
-	rows := m.state.queueOverview.table.Rows()
-	focused := m.state.queueOverview.table.Focused()
-
-	m.state.queueOverview.table = table.New(
-		table.WithColumns(cols),
-		table.WithRows(rows),
-		table.WithFocused(focused),
-		table.WithHeight(tableHeight),
-	)
-	m.state.queueOverview.table.SetStyles(styles.TableStyles())
-	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
-
-	if len(m.state.queueDetails.messagesTable.Columns()) > 0 {
-		msgCols := m.state.queueDetails.messagesTable.Columns()
-		msgRows := m.state.queueDetails.messagesTable.Rows()
-		msgFocused := m.state.queueDetails.messagesTable.Focused()
-
-		m.state.queueDetails.messagesTable = table.New(
-			table.WithColumns(msgCols),
-			table.WithRows(msgRows),
-			table.WithFocused(msgFocused),
-			table.WithHeight(m.getMessageTableHeight()),
-		)
-		m.state.queueDetails.messagesTable.SetStyles(styles.TableStyles())
-		m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
-	}
-
-	return m
-}
-
-func (m model) updateQueueOverviewTable() model {
-	var rows []table.Row
-	for i, queue := range m.state.queueOverview.queues {
-		queueType := "standard"
-		if queue.FifoQueue == "true" {
-			queueType = "fifo"
-		}
-		visibility := queue.VisibilityTimeout + "s"
-		retention := formatRetention(queue.MessageRetentionPeriod)
-
-		// Add selection indicator to queue name
-		queueName := queue.Name
-		if m.state.queueOverview.selectedItems[i] {
-			queueName = "● " + queue.Name
-		}
-
-		rows = append(rows, table.Row{
-			queueName,
-			queueType,
-			centerText(queue.ApproximateNumberOfMessages, 10),
-			centerText(queue.ApproximateNumberOfMessagesNotVisible, 10),
-			centerText(queue.ApproximateNumberOfMessagesDelayed, 10),
-			centerText(visibility, 10),
-			centerText(retention, 10),
-			queue.LastModified,
-		})
-	}
-
-	m.state.queueOverview.table.SetRows(rows)
-	if m.state.queueOverview.selected >= len(m.state.queueOverview.queues) {
-		m.state.queueOverview.selected = max(0, len(m.state.queueOverview.queues)-1)
-	}
-	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
-
-	return m
-}
-
-func (m model) updateQueueOverviewTableFiltered() model {
-	filteredQueues := m.getFilteredQueues()
-	var rows []table.Row
-	for _, queue := range filteredQueues {
-		queueType := "standard"
-		if queue.FifoQueue == "true" {
-			queueType = "fifo"
-		}
-		visibility := queue.VisibilityTimeout + "s"
-		retention := formatRetention(queue.MessageRetentionPeriod)
-
-		// Find original index to check selection
-		queueName := queue.Name
-		for origIdx, origQueue := range m.state.queueOverview.queues {
-			if origQueue.Url == queue.Url && m.state.queueOverview.selectedItems[origIdx] {
-				queueName = "● " + queue.Name
-				break
-			}
-		}
-
-		rows = append(rows, table.Row{
-			queueName,
-			queueType,
-			centerText(queue.ApproximateNumberOfMessages, 10),
-			centerText(queue.ApproximateNumberOfMessagesNotVisible, 10),
-			centerText(queue.ApproximateNumberOfMessagesDelayed, 10),
-			centerText(visibility, 10),
-			centerText(retention, 10),
-			queue.LastModified,
-		})
-	}
-
-	m.state.queueOverview.table.SetRows(rows)
-	if m.state.queueOverview.selected >= len(filteredQueues) {
-		m.state.queueOverview.selected = max(0, len(filteredQueues)-1)
-	}
-	m.state.queueOverview.table.SetCursor(m.state.queueOverview.selected)
-
-	return m
-}
-
-func (m model) updateMessagesTable() model {
-	var rows []table.Row
-	for i, message := range m.state.queueDetails.messages {
-		// Add selection indicator to message ID
-		messageID := message.MessageID
-		if m.state.queueDetails.selectedItems[i] {
-			messageID = "● " + message.MessageID
-		}
-
-		rows = append(rows, table.Row{
-			messageID,
-			message.Body,
-			message.SentTimestamp,
-			fmt.Sprintf("%d", len(message.Body)),
-		})
-	}
-
-	m.state.queueDetails.messagesTable = initMessageDetailsTable(m.getMessageTableHeight())
-	m.state.queueDetails.messagesTable.SetRows(rows)
-	if m.state.queueDetails.selected >= len(m.state.queueDetails.messages) {
-		m.state.queueDetails.selected = max(0, len(m.state.queueDetails.messages)-1)
-	}
-	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
-
-	return m
-}
-
-func (m model) updateMessagesTableFiltered() model {
-	filteredMessages := m.getFilteredMessages()
-	var rows []table.Row
-	for _, message := range filteredMessages {
-		// Find original index to check selection
-		messageID := message.MessageID
-		for origIdx, origMsg := range m.state.queueDetails.messages {
-			if origMsg.MessageID == message.MessageID && m.state.queueDetails.selectedItems[origIdx] {
-				messageID = "● " + message.MessageID
-				break
-			}
-		}
-
-		rows = append(rows, table.Row{
-			messageID,
-			message.Body,
-			message.SentTimestamp,
-			fmt.Sprintf("%d", len(message.Body)),
-		})
-	}
-
-	m.state.queueDetails.messagesTable = initMessageDetailsTable(m.getMessageTableHeight())
-	m.state.queueDetails.messagesTable.SetRows(rows)
-	if m.state.queueDetails.selected >= len(filteredMessages) {
-		m.state.queueDetails.selected = max(0, len(filteredMessages)-1)
-	}
-	m.state.queueDetails.messagesTable.SetCursor(m.state.queueDetails.selected)
-
-	return m
-}
-
-func formatRetention(seconds string) string {
-	if seconds == "" {
-		return "-"
-	}
-
-	var secs int
-	if _, err := fmt.Sscanf(seconds, "%d", &secs); err != nil {
-		return seconds
-	}
-
-	days := secs / 86400
-	if days > 0 {
-		return fmt.Sprintf("%dd", days)
-	}
-
-	hours := secs / 3600
-	if hours > 0 {
-		return fmt.Sprintf("%dh", hours)
-	}
-
-	return fmt.Sprintf("%ds", secs)
-}
-
-func centerText(text string, width int) string {
-	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(text)
+	columns := lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().MarginRight(gap).Render(navigation), actions)
+	return lipgloss.JoinVertical(lipgloss.Center, columns, "", styles.Faint("press any key to close"))
 }

@@ -3,12 +3,11 @@ package tui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
-	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
@@ -24,194 +23,128 @@ type queueRedriveState struct {
 	fromOverview   bool // true when triggered from queue overview
 }
 
-func (m model) QueueRedriveSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+// running reports whether the latest redrive task is still moving messages.
+func (r queueRedriveState) running() bool {
+	return len(r.tasks) == 0 || r.tasks[0].Status == "RUNNING" || r.tasks[0].Status == "CANCELLING"
+}
+
+// openRedrive asks to redrive the messages of a dead-letter queue back to the queue they came from.
+func (m model) openRedrive(q kue.Queue, fromOverview bool) (model, tea.Cmd) {
+	sourceArn := m.findSourceQueueArn(q.Arn)
+	if sourceArn == "" {
+		m.error = fmt.Sprintf("queue %s is not a dead-letter queue, no queue sends its failed messages to it.", q.Name)
+		return m, nil
+	}
+	r := &m.state.queueRedrive
+	r.queue = q
+	r.destinationArn = sourceArn
+	r.fromOverview = fromOverview
+	return m.QueueRedriveSwitchPage()
+}
+
+func (m model) QueueRedriveSwitchPage() (model, tea.Cmd) {
 	m.error = ""
-	m.state.queueRedrive.selected = 0
-	m.state.queueRedrive.inProgress = false
-	m.state.queueRedrive.taskHandle = ""
-	m.state.queueRedrive.tasks = nil
+	r := &m.state.queueRedrive
+	r.selected = 0
+	r.inProgress = false
+	r.taskHandle = ""
+	r.tasks = nil
 	return m.SwitchPage(queueRedrive), nil
 }
 
-func (m model) queueRedriveGoBack(msg tea.Msg) (model, tea.Cmd) {
+func (m model) queueRedriveGoBack() (model, tea.Cmd) {
 	if m.state.queueRedrive.fromOverview {
-		m.error = ""
-		return m.SwitchPage(queueOverview), nil
+		return m.QueueOverviewGoBack()
 	}
-	return m.QueueDetailsGoBack(msg)
+	if m.state.queueRedrive.inProgress {
+		return m.QueueDetailsReload()
+	}
+	return m.queueDetailsGoBack()
 }
 
 func (m model) QueueRedriveView() string {
 	if m.state.queueRedrive.inProgress {
 		return m.renderRedriveProgress()
 	}
-	return m.renderRedriveConfirmation()
-}
-
-func (m model) renderRedriveConfirmation() string {
-	queueDisplay := styles.Bold.Render(m.state.queueRedrive.queue.Name)
-
-	confirm := "yes"
-	abort := "no"
-
-	if m.state.queueRedrive.selected == 0 {
-		abort = styles.ButtonSecondary.Render(abort)
-		confirm = styles.ButtonPrimary.Render(confirm)
-	} else {
-		abort = styles.ButtonPrimary.Render(abort)
-		confirm = styles.ButtonSecondary.Render(confirm)
-	}
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, abort, "    ", confirm)
-	dialog := lipgloss.JoinVertical(lipgloss.Center,
-		"warning: DLQ redrive",
+	r := m.state.queueRedrive
+	return dialog("redrive dead-letter queue", styles.ToneWarning,
+		styles.Render(styles.S("move the messages of ", styles.ToneBody), styles.B(dialogName(r.queue.Name), styles.ToneText),
+			styles.S(" back to ", styles.ToneBody), styles.B(dialogName(queueName(r.destinationArn)), styles.ToneText), styles.S("?", styles.ToneBody)),
+		styles.Faint("moves about "+plural(int(atoi(r.queue.ApproximateNumberOfMessages)), "message")+", they are received again by its consumers."),
 		"",
-		"are you sure you want to redrive messages from: "+queueDisplay+" ?",
-		"",
-		buttons,
+		confirmButtons(r.selected, styles.ToneWarning),
 	)
-	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
 }
 
 func (m model) renderRedriveProgress() string {
-	labelStyle := lipgloss.NewStyle().Foreground(styles.MediumGray)
-	valueStyle := lipgloss.NewStyle().Foreground(styles.TextLight)
+	r := m.state.queueRedrive
+	route := styles.Render(styles.S(r.queue.Name, styles.ToneText), styles.S(" → ", styles.ToneFaint), styles.S(queueName(r.destinationArn), styles.ToneText))
 
-	var lines []string
-
-	if len(m.state.queueRedrive.tasks) == 0 {
-		titleStyle := lipgloss.NewStyle().Foreground(styles.AccentColor).Bold(true)
-		lines = append(lines,
-			titleStyle.Render("DLQ redrive"),
-			"",
-			labelStyle.Render("waiting for status..."),
-		)
-		dialog := lipgloss.JoinVertical(lipgloss.Center, lines...)
-		return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
+	if len(r.tasks) == 0 {
+		return dialog("redrive", styles.ToneAccent, route, "", styles.Muted("waiting for status…"))
 	}
 
-	task := m.state.queueRedrive.tasks[0]
-
-	// Title with status-aware color
-	titleColor := styles.AccentColor
-	titleLabel := "DLQ redrive"
+	task := r.tasks[0]
+	title, tone := "redrive", styles.ToneAccent
 	switch task.Status {
 	case "RUNNING":
-		titleLabel = "DLQ redrive in progress"
+		title = "redrive in progress"
 	case "COMPLETED":
-		titleLabel = "DLQ redrive completed"
+		title, tone = "redrive completed", styles.ToneSuccess
 	case "CANCELLING":
-		titleLabel = "DLQ redrive cancelling"
+		title, tone = "redrive cancelling", styles.ToneWarning
 	case "CANCELLED":
-		titleLabel = "DLQ redrive cancelled"
-		titleColor = styles.DangerRed
+		title, tone = "redrive cancelled", styles.ToneWarning
 	case "FAILED":
-		titleLabel = "DLQ redrive failed"
-		titleColor = styles.DangerRed
-	}
-	titleStyle := lipgloss.NewStyle().Foreground(titleColor).Bold(true)
-	lines = append(lines, titleStyle.Render(titleLabel))
-	lines = append(lines, "")
-
-	// Queue name
-	lines = append(lines, labelStyle.Render("queue: ")+valueStyle.Render(m.state.queueRedrive.queue.Name))
-	lines = append(lines, "")
-
-	// Progress bar
-	barWidth := 50
-	var pct float64
-	if task.ApproximateNumberOfMessagesToMove > 0 {
-		pct = float64(task.ApproximateNumberOfMessagesMoved) / float64(task.ApproximateNumberOfMessagesToMove)
-	} else if task.Status == "COMPLETED" {
-		pct = 1.0
+		title, tone = "redrive failed", styles.ToneDanger
 	}
 
-	bar := progress.New(
-		progress.WithSolidFill(string(styles.AccentColor)),
-		progress.WithWidth(barWidth),
-	)
-	bar.EmptyColor = string(styles.DarkGray)
+	var ratio float64
+	switch {
+	case task.ApproximateNumberOfMessagesToMove > 0:
+		ratio = float64(task.ApproximateNumberOfMessagesMoved) / float64(task.ApproximateNumberOfMessagesToMove)
+	case task.Status == "COMPLETED":
+		ratio = 1
+	}
+	bar := styles.Render(append(styles.Bar(ratio, 40, tone), styles.S(fmt.Sprintf(" %3.0f%%", ratio*100), styles.ToneMuted))...)
+	moved := styles.Muted(fmt.Sprintf("%s of %s messages moved",
+		formatCount(uint64(max(task.ApproximateNumberOfMessagesMoved, 0))),
+		formatCount(uint64(max(task.ApproximateNumberOfMessagesToMove, 0)))))
 
-	lines = append(lines, bar.ViewAs(pct))
-	lines = append(lines, "")
-
-	// Messages moved count
-	movedText := fmt.Sprintf("%d / %d messages moved",
-		task.ApproximateNumberOfMessagesMoved,
-		task.ApproximateNumberOfMessagesToMove,
-	)
-	lines = append(lines, labelStyle.Render(movedText))
-
-	// Failure reason
+	lines := []string{route, "", bar, moved}
 	if task.FailureReason != "" {
-		lines = append(lines, "")
-		failStyle := lipgloss.NewStyle().Foreground(styles.DangerRed)
-		lines = append(lines, failStyle.Render("error: "+task.FailureReason))
+		lines = append(lines, "", styles.Render(styles.S("✗ ", styles.ToneDanger), styles.S(task.FailureReason, styles.ToneDanger)))
 	}
-
-	// Navigation hint when done
-	if task.Status != "RUNNING" {
-		lines = append(lines, "")
-		hintStyle := lipgloss.NewStyle().Foreground(styles.DarkGray)
-		lines = append(lines, hintStyle.Render("press q to go back"))
+	if !r.running() {
+		lines = append(lines, "", styles.Faint("press q to go back"))
 	}
-
-	content := lipgloss.JoinVertical(lipgloss.Center, lines...)
-	box := lipgloss.NewStyle().
-		Width(barWidth + 4).
-		Align(lipgloss.Center).
-		Render(content)
-
-	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, box)
-}
-
-func (m model) switchRedriveOption() (model, tea.Cmd) {
-	m.state.queueRedrive.selected = (m.state.queueRedrive.selected + 1) % 2
-	return m, nil
+	return dialog(title, tone, lipgloss.JoinVertical(lipgloss.Center, lines...))
 }
 
 func (m model) QueueRedriveUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if m.state.queueRedrive.inProgress {
-			if key.Matches(msg, m.keys.Quit) {
-				return m.queueRedriveGoBack(msg)
-			}
-			return m, nil
+	r := &m.state.queueRedrive
+	if r.inProgress {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && key.Matches(keyMsg, m.keys.Quit, m.keys.Back) {
+			return m.queueRedriveGoBack()
 		}
-		switch {
-		case key.Matches(msg, m.keys.Left):
-			m, cmd = m.switchRedriveOption()
-		case key.Matches(msg, m.keys.Right):
-			m, cmd = m.switchRedriveOption()
-		case key.Matches(msg, m.keys.View):
-			if m.state.queueRedrive.selected == 0 {
-				return m.queueRedriveGoBack(msg)
-			}
-			m.state.queueRedrive.inProgress = true
-			m.loading = true
-			m.loadingMsg = "Starting redrive..."
-			return m, commands.StartRedrive(
-				m.context, m.client,
-				m.state.queueRedrive.queue.Arn,
-				m.state.queueRedrive.destinationArn,
-			)
-		case key.Matches(msg, m.keys.Quit):
-			m.state.queueRedrive.selected = 0
-			return m.queueRedriveGoBack(msg)
-		}
+		return m, nil
 	}
 
-	return m, cmd
+	switch m.confirmKey(msg, &r.selected) {
+	case confirmNo:
+		return m.queueRedriveGoBack()
+	case confirmYes:
+		m.busy, m.loading, m.loadingMsg = true, true, "starting redrive…"
+		return m, commands.StartRedrive(m.context, m.client, r.queue.Arn, r.destinationArn)
+	}
+	return m, nil
 }
 
 // findSourceQueueArn returns the ARN of the source queue that uses the given
 // ARN as its dead-letter target, or empty string if not found.
 func (m model) findSourceQueueArn(dlqArn string) string {
 	for _, q := range m.state.queueOverview.queues {
-		if q.DeadLetterTargetARN == dlqArn {
+		if dlqArn != "" && q.DeadLetterTargetARN == dlqArn {
 			return q.Arn
 		}
 	}

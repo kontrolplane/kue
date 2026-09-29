@@ -1,118 +1,66 @@
 package tui
 
 import (
-	"fmt"
+	tea "charm.land/bubbletea/v2"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/lipgloss"
-
-	tea "github.com/charmbracelet/bubbletea"
-	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
 // queueMessageDeleteState holds the state for message deletion confirmation.
 type queueMessageDeleteState struct {
-	message   kue.Message
-	messages  []kue.Message
-	queueUrl  string
-	queueName string
-	selected  int // 0 = no, 1 = yes
+	messages    []kue.Message
+	queueUrl    string
+	queueName   string
+	selected    int  // 0 = no, 1 = yes
+	fromDetails bool // true when triggered from the message details view
 }
 
-func (m model) QueueMessageDeleteSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+func (m model) QueueMessageDeleteSwitchPage() (model, tea.Cmd) {
 	m.error = ""
 	m.state.queueMessageDelete.selected = 0
 	return m.SwitchPage(queueMessageDelete), nil
 }
 
-func (m model) QueueMessageDeleteView() string {
-	numMessages := len(m.state.queueMessageDelete.messages)
-
-	var messageDisplay string
-	if numMessages == 1 {
-		messageID := m.state.queueMessageDelete.messages[0].MessageID
-		if len(messageID) > 20 {
-			messageID = messageID[:20] + "..."
-		}
-		messageDisplay = styles.Bold.Render(messageID)
-	} else {
-		messageDisplay = styles.Bold.Render(fmt.Sprintf("%d messages", numMessages))
+func (m model) messageDeleteGoBack() (model, tea.Cmd) {
+	if m.state.queueMessageDelete.fromDetails {
+		m.error = ""
+		return m.SwitchPage(queueMessageDetails), nil
 	}
-	queueName := styles.Bold.Render(m.state.queueMessageDelete.queueName)
-
-	confirm := "yes"
-	abort := "no"
-
-	if m.state.queueMessageDelete.selected == 0 {
-		abort = styles.ButtonSecondary.Render(abort)
-		confirm = styles.ButtonPrimary.Render(confirm)
-	} else {
-		abort = styles.ButtonPrimary.Render(abort)
-		confirm = styles.ButtonSecondary.Render(confirm)
-	}
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, abort, "    ", confirm)
-	dialog := lipgloss.JoinVertical(lipgloss.Center,
-		"warning: message deletion",
-		"",
-		"are you sure you want to delete: "+messageDisplay,
-		"from queue: "+queueName+" ?",
-		"",
-		buttons,
-	)
-	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
+	return m.queueDetailsGoBack()
 }
 
-func (m model) switchMessageDeleteOption() (model, tea.Cmd) {
-	m.state.queueMessageDelete.selected = (m.state.queueMessageDelete.selected + 1) % 2
-	return m, nil
+func (m model) QueueMessageDeleteView() string {
+	d := m.state.queueMessageDelete
+	ids := make([]string, len(d.messages))
+	for i, msg := range d.messages {
+		ids[i] = msg.MessageID
+	}
+
+	target := styles.B(plural(len(ids), "message"), styles.ToneText)
+	if len(ids) == 1 {
+		target = styles.B("message "+dialogName(ids[0]), styles.ToneText)
+	}
+	body := listBody(ids, false)
+	body = append(body, "", styles.Faint("deleted messages cannot be brought back."))
+	return confirmDialog(
+		"delete message",
+		[]styles.Span{styles.S("delete ", styles.ToneBody), target, styles.S(" from ", styles.ToneBody),
+			styles.B(dialogName(d.queueName), styles.ToneText), styles.S("?", styles.ToneBody)},
+		body,
+		d.selected,
+	)
 }
 
 func (m model) QueueMessageDeleteUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.keys.Left):
-			m, cmd = m.switchMessageDeleteOption()
-		case key.Matches(msg, m.keys.Right):
-			m, cmd = m.switchMessageDeleteOption()
-		case key.Matches(msg, m.keys.View):
-			if m.state.queueMessageDelete.selected == 0 {
-				if m.previous == queueMessageDetails {
-					return m.QueueMessageDetailsSwitchPage(msg)
-				}
-				return m.QueueDetailsGoBack(msg)
-			}
-			m.loading = true
-			numMessages := len(m.state.queueMessageDelete.messages)
-			if numMessages == 1 {
-				m.loadingMsg = "Deleting message..."
-				return m, commands.DeleteMessage(
-					m.context,
-					m.client,
-					m.state.queueMessageDelete.queueUrl,
-					m.state.queueMessageDelete.messages[0].ReceiptHandle,
-				)
-			}
-			m.loadingMsg = fmt.Sprintf("Deleting %d messages...", numMessages)
-			return m, commands.DeleteMessages(
-				m.context,
-				m.client,
-				m.state.queueMessageDelete.queueUrl,
-				m.state.queueMessageDelete.messages,
-			)
-		case key.Matches(msg, m.keys.Quit):
-			m.state.queueMessageDelete.selected = 0
-			if m.previous == queueMessageDetails {
-				return m.QueueMessageDetailsSwitchPage(msg)
-			}
-			return m.QueueDetailsGoBack(msg)
-		}
+	d := &m.state.queueMessageDelete
+	switch m.confirmKey(msg, &d.selected) {
+	case confirmNo:
+		return m.messageDeleteGoBack()
+	case confirmYes:
+		m.busy, m.loading, m.loadingMsg = true, true, deletingMsg(len(d.messages), "message")
+		return m, commands.DeleteMessages(m.context, m.client, d.queueUrl, d.messages)
 	}
-
-	return m, cmd
+	return m, nil
 }

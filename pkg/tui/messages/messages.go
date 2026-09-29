@@ -13,46 +13,47 @@ type QueuesLoadedMsg struct {
 
 // QueueAttributesLoadedMsg is sent when queue attributes have been fetched.
 type QueueAttributesLoadedMsg struct {
+	Url   string
 	Queue kue.Queue
 	Err   error
 }
 
 // MessagesLoadedMsg is sent when queue messages have been loaded.
 type MessagesLoadedMsg struct {
+	Url      string
 	Messages []kue.Message
 	Err      error
 }
 
 // QueueCreatedMsg is sent when a queue has been created.
 type QueueCreatedMsg struct {
+	Name     string
 	QueueUrl string
 	Err      error
 }
 
-// QueueDeletedMsg is sent when a queue has been deleted.
-type QueueDeletedMsg struct {
-	Err error
+// QueuesDeletedMsg lists the queues that were deleted; Err holds the failure that stopped the others.
+type QueuesDeletedMsg struct {
+	Names []string
+	Err   error
 }
 
-// MessageDeletedMsg is sent when a message has been deleted.
-type MessageDeletedMsg struct {
-	Err error
+// MessagesDeletedMsg lists the messages that were deleted; Err holds the failure that stopped the others.
+type MessagesDeletedMsg struct {
+	MessageIDs []string
+	Err        error
 }
 
 // MessageCreatedMsg is sent when a message has been sent to a queue.
 type MessageCreatedMsg struct {
-	Err error
+	Queue string
+	Err   error
 }
 
-// RefreshTickMsg is sent periodically to trigger data refresh.
+// RefreshTickMsg triggers a background refresh. Ticks whose generation no longer
+// matches the model's are dropped, so at most one refresh loop is active.
 type RefreshTickMsg struct {
-	Page string // Identifies which page requested the refresh
-}
-
-// LoadingMsg indicates a loading state has started.
-type LoadingMsg struct {
-	Loading bool
-	Message string
+	Gen int
 }
 
 // QueueRedriveStartedMsg is sent when a DLQ redrive task has been started.
@@ -69,13 +70,20 @@ type QueueRedriveStatusMsg struct {
 
 // QueuePurgedMsg is sent when a queue has been purged.
 type QueuePurgedMsg struct {
-	Err error
+	Queue string
+	Err   error
 }
 
 // ClipboardCopiedMsg is sent after a clipboard copy operation completes.
 type ClipboardCopiedMsg struct {
-	Err error
+	Text string
+	Err  error
 }
 
 // StatusClearMsg is sent to clear the transient status message.
-type StatusClearMsg struct{}
+type StatusClearMsg struct {
+	Gen int
+}
+
+// ClockTickMsg redraws the time since the last refresh.
+type ClockTickMsg struct{}

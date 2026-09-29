@@ -6,11 +6,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
-	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
@@ -32,128 +33,150 @@ type queueCreateInput struct {
 	fifoThroughputLimit       string
 }
 
+// dirty reports whether anything was typed that leaving the form would lose.
+func (in *queueCreateInput) dirty() bool {
+	for _, v := range []string{in.name, in.visibilityTimeout, in.messageRetentionPeriod, in.deliveryDelay, in.maximumMessageSize, in.receiveMessageWaitTime} {
+		if strings.TrimSpace(v) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 type queueCreateState struct {
 	input       *queueCreateInput
 	form        *huh.Form
+	stepOf      map[huh.Field]int
 	currentStep int
 }
 
-const formWidth = 100
+// formWidth leaves the form room on both sides, like the other pages, up to 100 columns.
+func formWidth() int { return min(100, contentWidth-8) }
 
-// newQueueCreateForm builds the multi-step queue creation form.
-// Steps: Basic → Messages → Advanced → FIFO (conditional).
-func newQueueCreateForm(input *queueCreateInput) *huh.Form {
-	form := huh.NewForm(
-		huh.NewGroup(
+// formHeight is the height the form gets below its step header.
+func formHeight() int { return contentHeight - 4 }
+
+var formSteps = []string{"basic", "messages", "advanced", "fifo"}
+
+// newQueueCreateForm builds the form, and maps each field to the index of its step in formSteps.
+// The fifo step only shows for a fifo queue.
+func newQueueCreateForm(input *queueCreateInput) (*huh.Form, map[huh.Field]int) {
+	steps := [][]huh.Field{
+		{
 			huh.NewInput().
-				Title("Queue Name").
-				Description("Alphanumeric characters, hyphens, and underscores only (1-80 chars)").
-				Placeholder("queue-name").
+				Title("queue name").
+				Description("letters, digits, hyphens and underscores, at most 80 characters").
+				Placeholder("orders").
 				Value(&input.name).
-				Validate(func(s string) error {
-					s = strings.TrimSpace(s)
-					if s == "" {
-						return fmt.Errorf("queue name is required")
-					}
-					if len(s) > 80 {
-						return fmt.Errorf("queue name must be 80 characters or less")
-					}
-					if !queueNameRegex.MatchString(s) {
-						return fmt.Errorf("only alphanumeric characters, hyphens, and underscores allowed")
-					}
-					return nil
-				}),
+				Validate(validateQueueName),
 
 			huh.NewSelect[string]().
-				Title("Queue Type").
-				Description("Standard: best-effort ordering, higher throughput. FIFO: guaranteed ordering.").
+				Title("queue type").
+				Description("standard: best-effort ordering, higher throughput. fifo: guaranteed ordering").
 				Options(
-					huh.NewOption("Standard", "standard"),
-					huh.NewOption("FIFO", "fifo"),
+					huh.NewOption("standard", "standard"),
+					huh.NewOption("fifo", "fifo"),
 				).
 				Value(&input.queueType),
-		).Title("Basic Configuration").
-			Description("Required settings for creating a new queue"),
-
-		huh.NewGroup(
+		},
+		{
 			huh.NewInput().
-				Title("Visibility Timeout").
-				Description("Seconds a message is hidden after being received (0-43200)").
+				Title("visibility timeout").
+				Description("seconds a message is hidden after being received (0-43200)").
 				Placeholder("30").
 				Value(&input.visibilityTimeout).
 				Validate(validateIntRange(0, 43200)),
 
 			huh.NewInput().
-				Title("Message Retention Period").
-				Description("Seconds messages are kept before deletion (60-1209600)").
+				Title("message retention period").
+				Description("seconds messages are kept before deletion (60-1209600)").
 				Placeholder("345600").
 				Value(&input.messageRetentionPeriod).
-				Validate(validateIntRangeOrEmpty(60, 1209600)),
+				Validate(validateIntRange(60, 1209600)),
 
 			huh.NewInput().
-				Title("Delivery Delay").
-				Description("Seconds before messages become visible (0-900)").
+				Title("delivery delay").
+				Description("seconds before messages become visible (0-900)").
 				Placeholder("0").
 				Value(&input.deliveryDelay).
 				Validate(validateIntRange(0, 900)),
-		).Title("Message Settings").
-			Description("Configure message visibility and retention"),
-
-		huh.NewGroup(
+		},
+		{
 			huh.NewInput().
-				Title("Maximum Message Size").
-				Description("Maximum message size in bytes (1024-262144)").
+				Title("maximum message size").
+				Description("maximum message size in bytes (1024-262144)").
 				Placeholder("262144").
 				Value(&input.maximumMessageSize).
-				Validate(validateIntRangeOrEmpty(1024, 262144)),
+				Validate(validateIntRange(1024, 262144)),
 
 			huh.NewInput().
-				Title("Receive Wait Time").
-				Description("Long polling wait time in seconds (0-20)").
+				Title("receive wait time").
+				Description("long polling wait time in seconds (0-20)").
 				Placeholder("0").
 				Value(&input.receiveMessageWaitTime).
 				Validate(validateIntRange(0, 20)),
-		).Title("Advanced Settings").
-			Description("Fine-tune queue behavior"),
-
-		huh.NewGroup(
+		},
+		{
 			huh.NewConfirm().
-				Title("Content-Based Deduplication").
-				Description("Automatically deduplicate messages based on body content").
+				Title("content based deduplication").
+				Description("deduplicate messages based on a hash of their body").
 				Value(&input.contentBasedDeduplication),
 
 			huh.NewSelect[string]().
-				Title("Deduplication Scope").
-				Description("Scope for message deduplication").
+				Title("deduplication scope").
+				Description("where message deduplication applies").
 				Options(
-					huh.NewOption("Queue", "queue"),
-					huh.NewOption("Message Group", "messageGroup"),
+					huh.NewOption("queue", "queue"),
+					huh.NewOption("message group", "messageGroup"),
 				).
 				Value(&input.deduplicationScope),
 
 			huh.NewSelect[string]().
-				Title("Throughput Limit").
-				Description("Throughput quota allocation").
+				Title("throughput limit").
+				Description("how the throughput quota is allocated").
 				Options(
-					huh.NewOption("Per Queue", "perQueue"),
-					huh.NewOption("Per Message Group ID", "perMessageGroupId"),
+					huh.NewOption("per queue", "perQueue"),
+					huh.NewOption("per message group id", "perMessageGroupId"),
 				).
 				Value(&input.fifoThroughputLimit),
-		).Title("FIFO Settings").
-			Description("Configure FIFO-specific queue behavior").
-			WithHideFunc(func() bool { return input.queueType != "fifo" }),
-	).
-		WithTheme(styles.FormTheme()).
-		WithShowHelp(true).
-		WithWidth(formWidth).
-		WithShowErrors(true)
+		},
+	}
 
-	return form
+	stepOf := map[huh.Field]int{}
+	groups := make([]*huh.Group, len(steps))
+	for i, fields := range steps {
+		for _, f := range fields {
+			stepOf[f] = i
+		}
+		groups[i] = huh.NewGroup(fields...).Title(formSteps[i])
+	}
+	groups[3] = groups[3].WithHideFunc(func() bool { return input.queueType != "fifo" })
+
+	form := huh.NewForm(groups...).
+		WithTheme(styles.FormTheme()).
+		WithShowHelp(false).
+		WithWidth(formWidth()).
+		WithHeight(formHeight()).
+		WithShowErrors(false)
+	return form, stepOf
+}
+
+func validateQueueName(s string) error {
+	s = strings.TrimSpace(s)
+	switch {
+	case s == "":
+		return fmt.Errorf("queue name is required")
+	case len(s) > 80:
+		return fmt.Errorf("queue name must be 80 characters or less")
+	case !queueNameRegex.MatchString(s):
+		return fmt.Errorf("only alphanumeric characters, hyphens, and underscores allowed")
+	}
+	return nil
 }
 
 func validateIntRange(min, max int) func(string) error {
 	return func(s string) error {
-		if s == "" {
+		if s = strings.TrimSpace(s); s == "" {
 			return nil
 		}
 		val, err := strconv.Atoi(s)
@@ -167,37 +190,35 @@ func validateIntRange(min, max int) func(string) error {
 	}
 }
 
-func validateIntRangeOrEmpty(min, max int) func(string) error {
-	return func(s string) error {
-		if s == "" {
-			return nil
-		}
-		val, err := strconv.Atoi(s)
-		if err != nil {
-			return fmt.Errorf("must be a valid number")
-		}
-		if val < min || val > max {
-			return fmt.Errorf("must be between %d and %d", min, max)
-		}
-		return nil
-	}
-}
-
-func (m model) QueueCreateSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+func (m model) QueueCreateSwitchPage() (model, tea.Cmd) {
 	m.error = ""
+	m.armed = false
 	m.state.queueCreate.input = &queueCreateInput{
 		queueType:           "standard",
 		deduplicationScope:  "queue",
 		fifoThroughputLimit: "perQueue",
 	}
-	m.state.queueCreate.form = newQueueCreateForm(m.state.queueCreate.input)
-	m.state.queueCreate.currentStep = 0
-	return m.SwitchPage(queueCreate), m.state.queueCreate.form.Init()
+	return m.openQueueCreateForm()
+}
+
+// openQueueCreateForm shows a new form on the current input, which keeps what was entered.
+func (m model) openQueueCreateForm() (model, tea.Cmd) {
+	c := &m.state.queueCreate
+	c.form, c.stepOf = newQueueCreateForm(c.input)
+	c.currentStep = 0
+	return m.SwitchPage(queueCreate), c.form.Init()
+}
+
+// reopenQueueCreate returns to the form after the queue could not be created, keeping the input.
+func (m model) reopenQueueCreate(reason string) (model, tea.Cmd) {
+	m, cmd := m.openQueueCreateForm()
+	m.error = reason
+	return m, cmd
 }
 
 func (m model) QueueCreateView() string {
 	if m.state.queueCreate.form == nil {
-		return "Loading..."
+		return "loading…"
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		m.renderFormHeader(),
@@ -206,123 +227,100 @@ func (m model) QueueCreateView() string {
 	return lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Top, content)
 }
 
-// detectFormStep determines the current step by checking for unique field titles.
-func detectFormStep(view string) int {
-	switch {
-	case strings.Contains(view, "Content-Based Deduplication"),
-		strings.Contains(view, "Deduplication Scope"),
-		strings.Contains(view, "Throughput Limit"):
-		return 3 // FIFO
-	case strings.Contains(view, "Maximum Message Size"),
-		strings.Contains(view, "Receive Wait Time"):
-		return 2 // Advanced
-	case strings.Contains(view, "Visibility Timeout"),
-		strings.Contains(view, "Message Retention"),
-		strings.Contains(view, "Delivery Delay"):
-		return 1 // Messages
-	default:
-		return 0 // Basic
+// renderFormHeader renders the progress indicator showing the current form step.
+func (m model) renderFormHeader() string {
+	c := m.state.queueCreate
+	names := formSteps
+	if c.input == nil || c.input.queueType != "fifo" {
+		names = formSteps[:3]
 	}
+	var steps []string
+	for i, step := range names {
+		switch {
+		case i < c.currentStep:
+			steps = append(steps, styles.Render(styles.S("✓ ", styles.ToneAccent), styles.S(step, styles.ToneMuted)))
+		case i == c.currentStep:
+			steps = append(steps, styles.Render(styles.B("● ", styles.ToneAccent), styles.B(step, styles.ToneText)))
+		default:
+			steps = append(steps, styles.Render(styles.S("○ ", styles.ToneFaint), styles.S(step, styles.ToneFaint)))
+		}
+	}
+	line := strings.Join(steps, styles.Faint("   ───   "))
+	return lipgloss.JoinVertical(lipgloss.Center,
+		lipgloss.PlaceHorizontal(formWidth(), lipgloss.Center, line),
+		lipgloss.NewStyle().Foreground(styles.P.Rule).Render(strings.Repeat("─", formWidth())),
+		lipgloss.PlaceHorizontal(formWidth(), lipgloss.Left, m.renderFormError()),
+	)
 }
 
-// renderFormHeader renders the progress indicator showing current form step.
-func (m model) renderFormHeader() string {
-	isFifo := m.state.queueCreate.input != nil && m.state.queueCreate.input.queueType == "fifo"
-
-	steps := []string{"1. Basic", "2. Messages", "3. Advanced"}
-	if isFifo {
-		steps = append(steps, "4. FIFO")
+// renderFormError shows why the form does not move on. huh adds its errors below a group sized
+// without them, where they are cut off, so the line the header keeps free shows them instead.
+func (m model) renderFormError() string {
+	f := m.state.queueCreate.form
+	if f == nil {
+		return ""
 	}
-
-	currentStep := m.state.queueCreate.currentStep
-	if !isFifo && currentStep > 2 {
-		currentStep = 2
+	errs := f.Errors()
+	if len(errs) == 0 {
+		return ""
 	}
-
-	var stepViews []string
-	for i, step := range steps {
-		style := lipgloss.NewStyle().PaddingRight(3)
-		switch {
-		case i < currentStep:
-			style = style.Foreground(styles.AccentColor)
-		case i == currentStep:
-			style = style.Foreground(styles.TextLight).Bold(true)
-		default:
-			style = style.Foreground(styles.DarkGray)
-		}
-		stepViews = append(stepViews, style.Render(step))
-	}
-
-	return lipgloss.NewStyle().
-		Width(formWidth).
-		Align(lipgloss.Center).
-		PaddingBottom(1).
-		MarginBottom(1).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		BorderForeground(styles.BorderColor).
-		Render(lipgloss.JoinHorizontal(lipgloss.Center, stepViews...))
+	return styles.Render(styles.S("✗ ", styles.ToneDanger), styles.S(truncate(errs[0].Error(), formWidth()-2), styles.ToneDanger))
 }
 
 func (m model) QueueCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
-	if m.state.queueCreate.form == nil {
+	c := &m.state.queueCreate
+	if c.form == nil || m.loading {
 		return m, nil
 	}
 
-	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "esc" {
-		return m.QueueOverviewSwitchPage(msg)
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && key.Matches(keyMsg, m.keys.Back) {
+		if c.input.dirty() && !m.armed {
+			m.armed = true
+			return m.setStatus(discardPrompt, styles.ToneWarning)
+		}
+		return m.QueueOverviewGoBack()
 	}
 
-	form, cmd := m.state.queueCreate.form.Update(msg)
+	form, cmd := c.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
-		m.state.queueCreate.form = f
-		m.state.queueCreate.currentStep = detectFormStep(f.View())
+		c.form = f
+		c.currentStep = c.stepOf[f.GetFocusedField()]
 	}
 
-	switch m.state.queueCreate.form.State {
+	switch c.form.State {
 	case huh.StateCompleted:
-		return m.submitQueueCreate(msg)
+		return m.submitQueueCreate()
 	case huh.StateAborted:
-		return m.QueueOverviewSwitchPage(msg)
+		return m.QueueOverviewGoBack()
 	}
 
 	return m, cmd
 }
 
-// submitQueueCreate validates input and triggers async queue creation.
-func (m model) submitQueueCreate(msg tea.Msg) (model, tea.Cmd) {
-	input := m.state.queueCreate.input
-	queueName := strings.TrimSpace(input.name)
-
-	if queueName == "" {
-		m.error = "Queue name is required"
-		return m.QueueOverviewSwitchPage(msg)
-	}
-	if !queueNameRegex.MatchString(queueName) {
-		m.error = "Queue name can only contain alphanumeric characters, hyphens, and underscores"
-		return m.QueueOverviewSwitchPage(msg)
+// buildQueueConfig converts the form input into a queue configuration.
+func buildQueueConfig(input *queueCreateInput) (kue.QueueConfig, error) {
+	name := strings.TrimSpace(input.name)
+	if err := validateQueueName(name); err != nil {
+		return kue.QueueConfig{}, err
 	}
 
 	config := kue.QueueConfig{
-		Name:   queueName,
+		Name:   name,
 		IsFifo: input.queueType == "fifo",
 	}
-
-	// Parse optional numeric settings
-	if val, err := strconv.Atoi(input.visibilityTimeout); err == nil {
-		config.VisibilityTimeout = val
-	}
-	if val, err := strconv.Atoi(input.messageRetentionPeriod); err == nil {
-		config.MessageRetentionPeriod = val
-	}
-	if val, err := strconv.Atoi(input.deliveryDelay); err == nil {
-		config.DelaySeconds = val
-	}
-	if val, err := strconv.Atoi(input.maximumMessageSize); err == nil {
-		config.MaximumMessageSize = val
-	}
-	if val, err := strconv.Atoi(input.receiveMessageWaitTime); err == nil {
-		config.ReceiveMessageWaitTime = val
+	for _, f := range []struct {
+		value string
+		dst   *int
+	}{
+		{input.visibilityTimeout, &config.VisibilityTimeout},
+		{input.messageRetentionPeriod, &config.MessageRetentionPeriod},
+		{input.deliveryDelay, &config.DelaySeconds},
+		{input.maximumMessageSize, &config.MaximumMessageSize},
+		{input.receiveMessageWaitTime, &config.ReceiveMessageWaitTime},
+	} {
+		if val, err := strconv.Atoi(strings.TrimSpace(f.value)); err == nil {
+			*f.dst = val
+		}
 	}
 
 	if config.IsFifo {
@@ -330,8 +328,15 @@ func (m model) submitQueueCreate(msg tea.Msg) (model, tea.Cmd) {
 		config.DeduplicationScope = input.deduplicationScope
 		config.FifoThroughputLimit = input.fifoThroughputLimit
 	}
+	return config, nil
+}
 
-	m.loading = true
-	m.loadingMsg = "Creating queue..."
+// submitQueueCreate validates input and triggers async queue creation.
+func (m model) submitQueueCreate() (model, tea.Cmd) {
+	config, err := buildQueueConfig(m.state.queueCreate.input)
+	if err != nil {
+		return m.reopenQueueCreate(err.Error())
+	}
+	m.busy, m.loading, m.loadingMsg = true, true, "creating queue…"
 	return m, commands.CreateQueue(m.context, m.client, config)
 }

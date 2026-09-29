@@ -1,17 +1,15 @@
 package tui
 
 import (
-	"fmt"
-	"strconv"
+	tea "charm.land/bubbletea/v2"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/lipgloss"
-
-	tea "github.com/charmbracelet/bubbletea"
-	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
+
+// secondPromptThreshold is the message count above which a purge asks for confirmation twice.
+const secondPromptThreshold = 10
 
 // queuePurgeState holds the state for queue purge confirmation.
 type queuePurgeState struct {
@@ -21,98 +19,69 @@ type queuePurgeState struct {
 	fromOverview bool // true when triggered from queue overview
 }
 
-func (m model) QueuePurgeSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+func (m model) QueuePurgeSwitchPage() (model, tea.Cmd) {
 	m.error = ""
 	m.state.queuePurge.selected = 0
 	m.state.queuePurge.secondPrompt = false
 	return m.SwitchPage(queuePurge), nil
 }
 
-func (m model) queuePurgeGoBack(msg tea.Msg) (model, tea.Cmd) {
+func (m model) queuePurgeGoBack() (model, tea.Cmd) {
 	if m.state.queuePurge.fromOverview {
-		m.error = ""
-		return m.SwitchPage(queueOverview), nil
+		return m.QueueOverviewGoBack()
 	}
-	return m.QueueDetailsGoBack(msg)
+	return m.queueDetailsGoBack()
+}
+
+// queuePurgeFinished leaves the purge dialog once the queue is purged, reloading what it returns to.
+func (m model) queuePurgeFinished() (model, tea.Cmd) {
+	if m.state.queuePurge.fromOverview {
+		return m.QueueOverviewGoBack()
+	}
+	m.state.queueDetails.selectedItems = make(map[string]bool)
+	return m.QueueDetailsReload()
 }
 
 // queuePurgeMessageCount returns the approximate message count for the purge queue.
-func (m model) queuePurgeMessageCount() int {
-	n, _ := strconv.Atoi(m.state.queuePurge.queue.ApproximateNumberOfMessages)
-	return n
+func (m model) queuePurgeMessageCount() uint64 {
+	return atoi(m.state.queuePurge.queue.ApproximateNumberOfMessages)
 }
 
 func (m model) QueuePurgeView() string {
-	queueDisplay := styles.Bold.Render(m.state.queuePurge.queue.Name)
+	p := m.state.queuePurge
+	name := styles.B(dialogName(p.queue.Name), styles.ToneText)
+	note := styles.Faint("sqs allows one purge per queue every 60 seconds.")
 
-	confirm := "yes"
-	abort := "no"
-
-	if m.state.queuePurge.selected == 0 {
-		abort = styles.ButtonSecondary.Render(abort)
-		confirm = styles.ButtonPrimary.Render(confirm)
-	} else {
-		abort = styles.ButtonPrimary.Render(abort)
-		confirm = styles.ButtonSecondary.Render(confirm)
-	}
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, abort, "    ", confirm)
-
-	var prompt string
-	if m.state.queuePurge.secondPrompt {
-		count := m.queuePurgeMessageCount()
-		dangerStyle := lipgloss.NewStyle().Foreground(styles.DangerRed).Bold(true)
-		prompt = fmt.Sprintf(
-			"this queue has %s messages, are you really sure?",
-			dangerStyle.Render(fmt.Sprintf("~%d", count)),
+	if p.secondPrompt {
+		return dialog("purge queue", styles.ToneDanger,
+			styles.Render(styles.S("this removes about ", styles.ToneBody),
+				styles.B(plural(int(m.queuePurgeMessageCount()), "message"), styles.ToneDanger),
+				styles.S(" from ", styles.ToneBody), name, styles.S(", are you sure?", styles.ToneBody)),
+			note,
+			"",
+			confirmButtons(p.selected, styles.ToneDanger),
 		)
-	} else {
-		prompt = "are you sure you want to purge all messages from: " + queueDisplay + " ?"
 	}
-
-	dialog := lipgloss.JoinVertical(lipgloss.Center,
-		"warning: queue purge",
-		"",
-		prompt,
-		"",
-		buttons,
+	return confirmDialog(
+		"purge queue",
+		[]styles.Span{styles.S("purge all messages from ", styles.ToneBody), name, styles.S("?", styles.ToneBody)},
+		[]string{styles.Faint("removes about " + plural(int(m.queuePurgeMessageCount()), "message") + "."), note},
+		p.selected,
 	)
-	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
-}
-
-func (m model) switchPurgeOption() (model, tea.Cmd) {
-	m.state.queuePurge.selected = (m.state.queuePurge.selected + 1) % 2
-	return m, nil
 }
 
 func (m model) QueuePurgeUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.keys.Left):
-			m, cmd = m.switchPurgeOption()
-		case key.Matches(msg, m.keys.Right):
-			m, cmd = m.switchPurgeOption()
-		case key.Matches(msg, m.keys.View):
-			if m.state.queuePurge.selected == 0 {
-				return m.queuePurgeGoBack(msg)
-			}
-			// If >10 messages and haven't shown second prompt yet, show it
-			if !m.state.queuePurge.secondPrompt && m.queuePurgeMessageCount() > 10 {
-				m.state.queuePurge.secondPrompt = true
-				m.state.queuePurge.selected = 0
-				return m, nil
-			}
-			m.loading = true
-			m.loadingMsg = "Purging queue..."
-			return m, commands.PurgeQueue(m.context, m.client, m.state.queuePurge.queue.Url)
-		case key.Matches(msg, m.keys.Quit):
-			m.state.queuePurge.selected = 0
-			return m.queuePurgeGoBack(msg)
+	p := &m.state.queuePurge
+	switch m.confirmKey(msg, &p.selected) {
+	case confirmNo:
+		return m.queuePurgeGoBack()
+	case confirmYes:
+		if !p.secondPrompt && m.queuePurgeMessageCount() > secondPromptThreshold {
+			p.secondPrompt = true
+			return m, nil
 		}
+		m.busy, m.loading, m.loadingMsg = true, true, "purging "+p.queue.Name+"…"
+		return m, commands.PurgeQueue(m.context, m.client, p.queue.Name, p.queue.Url)
 	}
-
-	return m, cmd
+	return m, nil
 }

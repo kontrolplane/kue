@@ -6,7 +6,7 @@
   </h1>
 </p>
 
-`Kue` is a terminal user interface (tui) application designed for managing aws sqs (simple queue service). It provides an intuitive and efficient way to interact with your sqs queues directly from the terminal. With Kue, you can easily create, delete, and manage messages within your queues, making it an essential tool for engineers who prefer working within a terminal environment.
+`kue` is a terminal user interface (tui) application designed for managing aws sqs (simple queue service). It provides an intuitive and efficient way to interact with your sqs queues directly from the terminal. With Kue, you can easily create, delete, and manage messages within your queues, making it an essential tool for engineers who prefer working within a terminal environment.
 
 <p align="center">
   <img width="1500" alt="kue cassette" src="./assets/cassette.gif">
@@ -14,22 +14,49 @@
 
 ## views
 
-- `queue`: overview, details, creation, delete
-- `message`: details, creation, delete
+- `queue`: overview, details, creation, delete, purge, dead-letter redrive
+- `message`: details, send, delete
+
+The header shows the aws profile, region, account and endpoint in use, and the number of queues and messages across them.
 
 ## keybindings
 
-- `q`, `esc`, `ctrl+c`: quit/return
+- `q`: back, quit on the queue overview
+- `esc`: back, clear the filter or selection, cancel a dialog or form; never quits
+- `ctrl+c`: quit
 - `↑`, `k`: up
 - `↓`, `j`: down
 - `→`, `l`: right
 - `←`, `h`: left
-- `ctrl + d`: delete queue/message
-- `ctrl + n`: create queue/message
+- `g`, `G`: first/last row, top/bottom of a message body
+- `pgup`, `pgdn`: page up/down
+- `tab`, `shift+tab`: next/previous field
+- `ctrl+n`: create queue/send message
+- `ctrl+d`: delete queue/message
+- `ctrl+p`: purge queue
+- `ctrl+r`: redrive a dead-letter queue
+- `ctrl+s`: send (in the send view)
+- `y`, `n`: answer a yes/no dialog
+- `c`: copy message body/queue arn
+- `r`: refresh, also while paused
+- `p`: pause/resume the automatic refresh
 - `?`: help
 - `enter`: view
 - `space`: select
 - `/`: filter
+
+Deleting a queue asks to type its name first, and purging a queue with more than 10 messages asks twice. Pressing `esc` on a form with input asks again before discarding it.
+
+## flags
+
+| flag        | description                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `--theme`   | `auto`, the default, follows the terminal; `dark` and `light` paint their own background |
+| `--debug`   | write debug logs to `debug.log`                                                          |
+| `--version` | print the version and exit                                                               |
+| `--help`    | print the flags and exit                                                                 |
+
+The aws profile, region and endpoint come from the environment and the shared aws config, e.g. `AWS_PROFILE`, `AWS_REGION` and `AWS_ENDPOINT_URL`.
 
 ## demonstration
 
@@ -87,7 +114,7 @@ Kue uses [LocalStack](https://www.localstack.cloud/) running in Docker to simula
 - [docker](https://www.docker.com/)
 - [localstack](https://www.localstack.cloud/)
 - [earthly](https://earthly.dev/)
-- [go](https://go.dev/) 1.23+
+- [go](https://go.dev/) 1.26+
 
 ```bash
 docker run --rm -d \

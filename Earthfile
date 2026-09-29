@@ -1,5 +1,5 @@
 VERSION 0.8
-FROM golang:1.23.5-alpine3.21
+FROM golang:1.26-alpine
 WORKDIR /kontrolplane
 
 deps:
