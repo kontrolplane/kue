@@ -1,17 +1,32 @@
 package tui
 
 import (
+	"encoding/json"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
+
+type messageCreateFocus int
+
+const (
+	messageCreateFocusBody messageCreateFocus = iota
+	messageCreateFocusCancel
+	messageCreateFocusSubmit
+	messageCreateFocusCount
+)
+
+// maxMessageSize is the largest body SQS accepts.
+const maxMessageSize = 256 << 10
+
+func messageBodyHeight() int { return contentHeight - 2 }
 
 // queueMessageCreateState holds the state for message creation.
 type queueMessageCreateState struct {
@@ -19,234 +34,156 @@ type queueMessageCreateState struct {
 	queueUrl  string
 	isFifo    bool
 	textarea  textarea.Model
-	selected  int // 0 = textarea, 1 = cancel, 2 = submit
+	focus     messageCreateFocus
 }
 
-const (
-	messageLeftPanelWidth  = (contentWidth - 1) / 2                   // Split evenly, 1 for divider
-	messageRightPanelWidth = contentWidth - messageLeftPanelWidth - 1 // Remainder goes to right panel
-	messageTextareaWidth   = messageRightPanelWidth - 4               // Panel padding(4)
-	messageTextareaHeight  = contentHeight - 8                        // Height for textarea minus headers and panel padding
-)
-
-func (m model) QueueMessageCreateSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+func (m model) QueueMessageCreateSwitchPage() (model, tea.Cmd) {
 	m.error = ""
+	c := &m.state.queueMessageCreate
 
 	ta := textarea.New()
-	ta.Placeholder = "Enter message body (JSON or plain text)..."
-	ta.Focus()
-	ta.SetWidth(messageTextareaWidth)
-	ta.SetHeight(messageTextareaHeight)
-	ta.CharLimit = 262144
+	ta.Placeholder = "message body, json or plain text…"
+	ta.SetWidth(rightContentWidth)
+	ta.SetHeight(messageBodyHeight())
+	ta.CharLimit = maxMessageSize
+	ta.Prompt = "│ "
+	ta.SetStyles(styles.TextArea())
+	c.textarea = ta
 
-	m.state.queueMessageCreate.textarea = ta
-	m.state.queueMessageCreate.selected = 0
-	return m.SwitchPage(queueMessageCreate), nil
+	m.armed = false
+	m, cmd := m.focusMessageCreate(messageCreateFocusBody)
+	return m.SwitchPage(queueMessageCreate), cmd
 }
 
-func (m model) QueueMessageCreateView() string {
-	const (
-		leftContentWidth  = messageLeftPanelWidth - 4  // Account for padding (4)
-		rightContentWidth = messageRightPanelWidth - 4 // Account for padding (4)
-		labelWidth        = 14
-		valueWidth        = leftContentWidth - labelWidth - 2
-	)
+func (m model) focusMessageCreate(f messageCreateFocus) (model, tea.Cmd) {
+	c := &m.state.queueMessageCreate
+	c.focus = f
+	if f == messageCreateFocusBody {
+		return m, c.textarea.Focus()
+	}
+	c.textarea.Blur()
+	return m, nil
+}
 
-	labelStyle := lipgloss.NewStyle().
-		Foreground(styles.MediumGray).
-		Width(labelWidth).
-		Align(lipgloss.Right).
-		PaddingRight(2)
-
-	valueStyle := lipgloss.NewStyle().
-		Foreground(styles.TextLight).
-		Width(valueWidth)
-
-	sectionHeader := lipgloss.NewStyle().
-		Foreground(styles.TextLight).
-		Bold(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		BorderForeground(styles.BorderColor).
-		Width(leftContentWidth)
-
-	row := func(label, value string) string {
-		return lipgloss.JoinHorizontal(lipgloss.Top,
-			labelStyle.Render(label),
-			valueStyle.Render(value),
-		)
+func (m model) submitMessageCreate() (model, tea.Cmd) {
+	c := m.state.queueMessageCreate
+	body := c.textarea.Value()
+	if strings.TrimSpace(body) == "" {
+		m.error = "the message body cannot be empty."
+		return m, nil
 	}
 
-	// Left panel - top section (queue information)
-	var topSections []string
-	topSections = append(topSections, sectionHeader.Render("Queue Information"))
-	topSections = append(topSections, row("Queue Name", m.state.queueMessageCreate.queueName))
-
-	queueType := "Standard"
-	if m.state.queueMessageCreate.isFifo {
-		queueType = "FIFO"
+	input := kue.SendMessageInput{
+		QueueUrl:    c.queueUrl,
+		MessageBody: body,
 	}
-	topSections = append(topSections, row("Queue Type", queueType))
-
-	topContent := lipgloss.JoinVertical(lipgloss.Left, topSections...)
-
-	// Left panel - bottom section (instructions and buttons)
-	var bottomSections []string
-	bottomSections = append(bottomSections, sectionHeader.Render("Instructions"))
-	instructionStyle := lipgloss.NewStyle().
-		Foreground(styles.MediumGray).
-		Width(leftContentWidth).
-		MarginTop(1)
-	bottomSections = append(bottomSections, instructionStyle.Render("Enter your message body in the text area on the right."))
-	bottomSections = append(bottomSections, instructionStyle.Render("Supports JSON or plain text up to 256KB."))
-	if m.state.queueMessageCreate.isFifo {
-		bottomSections = append(bottomSections, instructionStyle.MarginTop(1).Render("FIFO messages will use 'default' as the message group ID."))
+	if c.isFifo {
+		input.MessageGroupId = "default"
 	}
-
-	// Buttons
-	cancelBtn := "cancel"
-	submitBtn := "submit"
-
-	switch m.state.queueMessageCreate.selected {
-	case 1:
-		cancelBtn = styles.ButtonSecondary.Render(cancelBtn)
-		submitBtn = styles.ButtonPrimary.Render(submitBtn)
-	case 2:
-		cancelBtn = styles.ButtonPrimary.Render(cancelBtn)
-		submitBtn = styles.ButtonSecondary.Render(submitBtn)
-	default:
-		cancelBtn = styles.ButtonPrimary.Render(cancelBtn)
-		submitBtn = styles.ButtonPrimary.Render(submitBtn)
-	}
-
-	buttonRow := lipgloss.JoinHorizontal(lipgloss.Center, cancelBtn, "    ", submitBtn)
-	buttons := lipgloss.NewStyle().
-		MarginTop(2).
-		Width(leftContentWidth).
-		Render(lipgloss.PlaceHorizontal(leftContentWidth, lipgloss.Center, buttonRow))
-
-	bottomSections = append(bottomSections, buttons)
-	bottomContent := lipgloss.JoinVertical(lipgloss.Left, bottomSections...)
-
-	// Combine top and bottom with bottom aligned to the bottom
-	leftPanelInner := lipgloss.JoinVertical(lipgloss.Left,
-		topContent,
-		lipgloss.PlaceVertical(contentHeight-lipgloss.Height(topContent), lipgloss.Bottom, bottomContent),
-	)
-
-	leftPanelStyle := lipgloss.NewStyle().
-		PaddingLeft(2).
-		PaddingRight(2).
-		Width(messageLeftPanelWidth).
-		Height(contentHeight)
-
-	leftPanel := leftPanelStyle.Render(leftPanelInner)
-
-	// Vertical divider - create full height line
-	var dividerLines string
-	for i := 0; i < contentHeight; i++ {
-		dividerLines += "│"
-		if i < contentHeight-1 {
-			dividerLines += "\n"
-		}
-	}
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(styles.BorderColor)
-
-	divider := dividerStyle.Render(dividerLines)
-
-	// Right panel - message body textarea
-	bodyHeaderStyle := lipgloss.NewStyle().
-		Foreground(styles.TextLight).
-		Bold(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		BorderForeground(styles.BorderColor).
-		Width(rightContentWidth).
-		MarginBottom(1)
-
-	rightPanelStyle := lipgloss.NewStyle().
-		PaddingLeft(2).
-		PaddingRight(2).
-		Width(messageRightPanelWidth).
-		Height(contentHeight)
-
-	rightContent := lipgloss.JoinVertical(lipgloss.Left,
-		bodyHeaderStyle.Render("Message Body"),
-		m.state.queueMessageCreate.textarea.View(),
-	)
-	rightPanel := rightPanelStyle.Render(rightContent)
-
-	// Join panels horizontally with divider
-	content := lipgloss.JoinHorizontal(lipgloss.Top,
-		leftPanel,
-		divider,
-		rightPanel,
-	)
-
-	return lipgloss.PlaceHorizontal(contentWidth, lipgloss.Center, content)
+	m.busy, m.loading, m.loadingMsg = true, true, "sending message…"
+	return m, commands.SendMessage(m.context, m.client, c.queueName, input)
 }
 
 func (m model) QueueMessageCreateUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
+	c := &m.state.queueMessageCreate
 
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch {
-		case key.Matches(msg, m.keys.Quit):
-			return m.QueueDetailsGoBack(msg)
-
-		case msg.Type == tea.KeyTab || msg.Type == tea.KeyShiftTab:
-			if msg.Type == tea.KeyShiftTab {
-				m.state.queueMessageCreate.selected--
-				if m.state.queueMessageCreate.selected < 0 {
-					m.state.queueMessageCreate.selected = 2
-				}
-			} else {
-				m.state.queueMessageCreate.selected = (m.state.queueMessageCreate.selected + 1) % 3
+		case key.Matches(keyMsg, m.keys.Back):
+			if strings.TrimSpace(c.textarea.Value()) != "" && !m.armed {
+				m.armed = true
+				return m.setStatus(discardPrompt, styles.ToneWarning)
 			}
+			return m.queueDetailsGoBack()
+		case key.Matches(keyMsg, m.keys.Submit):
+			return m.submitMessageCreate()
+		case key.Matches(keyMsg, m.keys.NextField):
+			return m.focusMessageCreate((c.focus + 1) % messageCreateFocusCount)
+		case key.Matches(keyMsg, m.keys.PrevField):
+			return m.focusMessageCreate((c.focus + messageCreateFocusCount - 1) % messageCreateFocusCount)
+		}
 
-			if m.state.queueMessageCreate.selected == 0 {
-				m.state.queueMessageCreate.textarea.Focus()
-			} else {
-				m.state.queueMessageCreate.textarea.Blur()
+		if c.focus != messageCreateFocusBody {
+			switch {
+			case key.Matches(keyMsg, m.keys.Left, m.keys.Right):
+				if c.focus == messageCreateFocusCancel {
+					c.focus = messageCreateFocusSubmit
+				} else {
+					c.focus = messageCreateFocusCancel
+				}
+			case key.Matches(keyMsg, m.keys.View):
+				if c.focus == messageCreateFocusCancel {
+					return m.queueDetailsGoBack()
+				}
+				return m.submitMessageCreate()
 			}
 			return m, nil
-
-		case key.Matches(msg, m.keys.View):
-			switch m.state.queueMessageCreate.selected {
-			case 1:
-				return m.QueueDetailsGoBack(msg)
-			case 2:
-				body := strings.TrimSpace(m.state.queueMessageCreate.textarea.Value())
-				if body == "" {
-					m.error = "Message body cannot be empty"
-					return m, nil
-				}
-
-				m.loading = true
-				m.loadingMsg = "Sending message..."
-
-				input := kue.SendMessageInput{
-					QueueUrl:    m.state.queueMessageCreate.queueUrl,
-					MessageBody: body,
-				}
-				if m.state.queueMessageCreate.isFifo {
-					input.MessageGroupId = "default"
-				}
-				return m, commands.SendMessage(m.context, m.client, input)
-			}
-		}
-
-		if m.state.queueMessageCreate.selected == 0 {
-			m.state.queueMessageCreate.textarea, cmd = m.state.queueMessageCreate.textarea.Update(msg)
-			return m, cmd
 		}
 	}
 
-	if m.state.queueMessageCreate.selected == 0 {
-		m.state.queueMessageCreate.textarea, cmd = m.state.queueMessageCreate.textarea.Update(msg)
+	if c.focus == messageCreateFocusBody {
+		c.textarea, cmd = c.textarea.Update(msg)
 	}
-
 	return m, cmd
+}
+
+func (m model) QueueMessageCreateView() string {
+	c := m.state.queueMessageCreate
+
+	kind := "standard"
+	if c.isFifo {
+		kind = "fifo"
+	}
+	notes := []string{"the body is sent as is, json or plain text up to 256 KiB."}
+	if c.isFifo {
+		notes = append(notes, "fifo messages are sent with the message group id default.")
+	}
+
+	top := []string{
+		panelSection("queue", true, leftContentWidth),
+		panelRowSpans("name", styles.S(c.queueName, styles.ToneText)),
+		panelRow("type", kind),
+		"",
+	}
+	for _, note := range notes {
+		top = append(top, styles.Faint(wrapLines(note, leftContentWidth, 2)))
+	}
+	topView := lipgloss.JoinVertical(lipgloss.Left, top...)
+
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center,
+		styles.Button("cancel", c.focus == messageCreateFocusCancel, styles.ToneText),
+		"    ",
+		styles.Button("send", c.focus == messageCreateFocusSubmit, styles.ToneText),
+	)
+	bottom := lipgloss.PlaceHorizontal(leftContentWidth, lipgloss.Center, buttons)
+
+	left := lipgloss.JoinVertical(lipgloss.Left,
+		topView,
+		lipgloss.PlaceVertical(contentHeight-lipgloss.Height(topView), lipgloss.Bottom, bottom),
+	)
+
+	bodyTitle := styles.Fg(styles.ToneText).Bold(true)
+	if c.focus == messageCreateFocusBody {
+		bodyTitle = styles.Fg(styles.ToneAccent).Bold(true)
+	}
+	right := lipgloss.JoinVertical(lipgloss.Left,
+		styles.SectionHeaderWith(bodyTitle.Render("body"), bodyMeta(c.textarea.Value()), rightContentWidth),
+		"",
+		c.textarea.View(),
+	)
+
+	return splitPanels(left, right)
+}
+
+// bodyMeta sizes the body being written and, when it looks like JSON, says whether it parses.
+func bodyMeta(body string) string {
+	meta := styles.Faint(formatBytes(uint64(len(body))))
+	if trimmed := strings.TrimSpace(body); strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		if json.Valid([]byte(trimmed)) {
+			return meta + styles.Faint(" · ") + styles.Render(styles.S("json ✓", styles.ToneSuccess))
+		}
+		return meta + styles.Faint(" · ") + styles.Render(styles.S("invalid json", styles.ToneWarning))
+	}
+	return meta
 }

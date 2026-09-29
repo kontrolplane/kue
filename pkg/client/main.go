@@ -11,8 +11,9 @@ import (
 
 // AWSInfo holds AWS configuration information for display.
 type AWSInfo struct {
-	Profile string
-	Region  string
+	Profile  string
+	Region   string
+	Endpoint string // set when requests go to an endpoint other than aws, e.g. localstack
 }
 
 // fetchContext loads the default AWS configuration using the AWS SDK for Go.
@@ -43,6 +44,9 @@ func CreateSqsClient(ctx context.Context) (*sqs.Client, AWSInfo, error) {
 	info := AWSInfo{
 		Profile: profile,
 		Region:  cfg.Region,
+	}
+	if cfg.BaseEndpoint != nil {
+		info.Endpoint = *cfg.BaseEndpoint
 	}
 
 	return sqs.NewFromConfig(cfg), info, nil

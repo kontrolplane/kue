@@ -3,95 +3,73 @@ package tui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
-	kue "github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
 // queueDeleteState holds the state for queue deletion confirmation.
 type queueDeleteState struct {
-	queues   []kue.Queue
-	selected int // 0 = no, 1 = yes
+	queues  []string
+	hidden  int // selected queues the overview filter hides, which are not deleted
+	confirm typedConfirm
 }
 
-func (m model) QueueDeleteSwitchPage(msg tea.Msg) (model, tea.Cmd) {
+// QueueDeleteSwitchPage asks to type the name of the queue, or how many are deleted, since a
+// deleted queue cannot be brought back.
+func (m model) QueueDeleteSwitchPage() (model, tea.Cmd) {
 	m.error = ""
-	m.state.queueDelete.selected = 0
-	return m.SwitchPage(queueDelete), nil
+	d := &m.state.queueDelete
+	want := fmt.Sprintf("delete %d queues", len(d.queues))
+	if len(d.queues) == 1 {
+		want = d.queues[0]
+	}
+	var cmd tea.Cmd
+	d.confirm, cmd = newTypedConfirm(want)
+	return m.SwitchPage(queueDelete), cmd
 }
 
 func (m model) QueueDeleteView() string {
-	numQueues := len(m.state.queueDelete.queues)
+	d := m.state.queueDelete
 
-	var queueDisplay string
-	if numQueues == 1 {
-		queueDisplay = styles.Bold.Render(m.state.queueDelete.queues[0].Name)
-	} else {
-		queueDisplay = styles.Bold.Render(fmt.Sprintf("%d queues", numQueues))
+	target, their := styles.B(plural(len(d.queues), "queue"), styles.ToneText), "their"
+	if len(d.queues) == 1 {
+		target, their = styles.B(dialogName(d.queues[0]), styles.ToneText), "its"
 	}
-
-	confirm := "yes"
-	abort := "no"
-
-	if m.state.queueDelete.selected == 0 {
-		abort = styles.ButtonSecondary.Render(abort)
-		confirm = styles.ButtonPrimary.Render(confirm)
-	} else {
-		abort = styles.ButtonPrimary.Render(abort)
-		confirm = styles.ButtonSecondary.Render(confirm)
+	body := []string{styles.Render(styles.S("delete ", styles.ToneBody), target, styles.S(" with all of "+their+" messages?", styles.ToneBody))}
+	body = append(body, listBody(d.queues, false)...)
+	body = append(body, "", styles.Faint("this cannot be undone, a queue with the same name can only be created again after 60 seconds."))
+	if d.hidden > 0 {
+		body = append(body, styles.Faint(fmt.Sprintf("%s hidden by the filter %s not included.", plural(d.hidden, "selected queue"), isAre(d.hidden))))
 	}
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, abort, "    ", confirm)
-	dialog := lipgloss.JoinVertical(lipgloss.Center,
-		"warning: queue deletion",
-		"",
-		"are you sure you want to delete: "+queueDisplay+" ?",
-		"",
-		buttons,
-	)
-	return lipgloss.Place(contentWidth, contentHeight-2, lipgloss.Center, lipgloss.Center, dialog)
+	body = append(body, "", d.confirm.view())
+	return dialog("delete queue", styles.ToneDanger, body...)
 }
 
-func (m model) switchOption() (model, tea.Cmd) {
-	m.state.queueDelete.selected = (m.state.queueDelete.selected + 1) % 2
-	return m, nil
+func isAre(n int) string {
+	if n == 1 {
+		return "is"
+	}
+	return "are"
 }
 
 func (m model) QueueDeleteUpdate(msg tea.Msg) (model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	d := &m.state.queueDelete
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch {
-		case key.Matches(msg, m.keys.Left):
-			m, cmd = m.switchOption()
-		case key.Matches(msg, m.keys.Right):
-			m, cmd = m.switchOption()
-		case key.Matches(msg, m.keys.View):
-			if m.state.queueDelete.selected == 0 {
-				return m.QueueOverviewSwitchPage(msg)
+		case key.Matches(keyMsg, m.keys.Back):
+			return m.QueueOverviewGoBack()
+		case key.Matches(keyMsg, m.keys.View):
+			if !d.confirm.ok() {
+				return m, nil
 			}
-			m.loading = true
-			numQueues := len(m.state.queueDelete.queues)
-			if numQueues == 1 {
-				m.loadingMsg = "Deleting queue..."
-				return m, commands.DeleteQueue(m.context, m.client, m.state.queueDelete.queues[0].Name)
-			}
-			m.loadingMsg = fmt.Sprintf("Deleting %d queues...", numQueues)
-			return m, commands.DeleteQueues(m.context, m.client, m.state.queueDelete.queues)
-		case key.Matches(msg, m.keys.Quit):
-			m.state.queueDelete.selected = 0
-			return m.QueueOverviewSwitchPage(msg)
-		default:
-			m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
+			m.busy, m.loading, m.loadingMsg = true, true, deletingMsg(len(d.queues), "queue")
+			return m, commands.DeleteQueues(m.context, m.client, d.queues)
 		}
-	default:
-		m.state.queueOverview.table, cmd = m.state.queueOverview.table.Update(msg)
 	}
-
+	var cmd tea.Cmd
+	d.confirm, cmd = d.confirm.update(msg)
 	return m, cmd
 }

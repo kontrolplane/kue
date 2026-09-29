@@ -1,228 +1,189 @@
 package tui
 
 import (
-	"encoding/json"
 	"fmt"
+	"slices"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
-	kue "github.com/kontrolplane/kue/pkg/kue"
+	"github.com/kontrolplane/kue/pkg/kue"
 	"github.com/kontrolplane/kue/pkg/tui/commands"
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
-const (
-	detailsLeftPanelWidth    = (contentWidth - 1) / 2                    // Split evenly, 1 for divider
-	detailsRightPanelWidth   = contentWidth - detailsLeftPanelWidth - 1  // Remainder goes to right panel
-	detailsRightContentWidth = detailsRightPanelWidth - 4
-	detailsViewportHeight    = contentHeight - 3 // Account for header and margin
-)
+func detailsViewportHeight() int { return contentHeight - 2 } // Account for the header and its spacing
 
 // queueMessageDetailsState holds the state for message details view.
 type queueMessageDetailsState struct {
 	message   kue.Message
 	queueName string
-	queueUrl  string
 	isFifo    bool
+	body      payloadText
+	kind      string // what the body is and its size, for the section header
 	viewport  viewport.Model
 }
 
-func formatMessageBody(body string) string {
-	var raw json.RawMessage
-	if err := json.Unmarshal([]byte(body), &raw); err != nil {
-		return body
-	}
-	pretty, err := json.MarshalIndent(raw, "", "  ")
-	if err != nil {
-		return body
-	}
-	return string(pretty)
+func (m model) QueueMessageDetailsSwitchPage() (model, tea.Cmd) {
+	m.error = ""
+	d := &m.state.queueMessageDetails
+	d.body = newPayloadText(d.message.Body)
+	d.kind = payloadKind(d.message.Body)
+	d.viewport = viewport.New(viewport.WithWidth(rightContentWidth), viewport.WithHeight(detailsViewportHeight()))
+	d.viewport.SetContent(d.body.render(rightContentWidth))
+	return m.SwitchPage(queueMessageDetails), nil
 }
 
-func (m model) QueueMessageDetailsSwitchPage(msg tea.Msg) (model, tea.Cmd) {
-	m.error = ""
-
-	// Initialize viewport for message body
-	vp := viewport.New(detailsRightContentWidth, detailsViewportHeight)
-	vp.SetContent(formatMessageBody(m.state.queueMessageDetails.message.Body))
-	m.state.queueMessageDetails.viewport = vp
-
-	return m.SwitchPage(queueMessageDetails), nil
+// resizeBody wraps the body again at the current width, keeping the scroll position.
+func (d *queueMessageDetailsState) resizeBody() {
+	offset := d.viewport.YOffset()
+	d.viewport.SetWidth(rightContentWidth)
+	d.viewport.SetHeight(detailsViewportHeight())
+	d.viewport.SetContent(d.body.render(rightContentWidth))
+	d.viewport.SetYOffset(offset)
 }
 
 func (m model) QueueMessageDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
+	d := &m.state.queueMessageDetails
 
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch {
-		case key.Matches(msg, m.keys.CopyToClipboard):
-			return m, commands.CopyToClipboard(m.state.queueMessageDetails.message.Body)
-		case key.Matches(msg, m.keys.DeleteMessage):
-			if m.state.queueMessageDetails.message.ReceiptHandle != "" {
-				m.state.queueMessageDelete.message = m.state.queueMessageDetails.message
-				m.state.queueMessageDelete.queueUrl = m.state.queueMessageDetails.queueUrl
-				m.state.queueMessageDelete.queueName = m.state.queueMessageDetails.queueName
-				return m.QueueMessageDeleteSwitchPage(msg)
+		case key.Matches(keyMsg, m.keys.CopyToClipboard):
+			return m, commands.CopyToClipboard(d.message.Body)
+		case key.Matches(keyMsg, m.keys.Delete):
+			if d.message.ReceiptHandle == "" {
+				return m, nil
 			}
-		case key.Matches(msg, m.keys.Quit):
-			return m.QueueDetailsGoBack(msg)
+			md := &m.state.queueMessageDelete
+			md.messages = []kue.Message{d.message}
+			md.queueUrl = m.state.queueDetails.queue.Url
+			md.queueName = d.queueName
+			md.fromDetails = true
+			return m.QueueMessageDeleteSwitchPage()
+		case key.Matches(keyMsg, m.keys.Quit, m.keys.Back):
+			return m.queueDetailsGoBack()
+		case key.Matches(keyMsg, m.keys.Top):
+			d.viewport.GotoTop()
+			return m, nil
+		case key.Matches(keyMsg, m.keys.Bottom):
+			d.viewport.GotoBottom()
+			return m, nil
 		}
 	}
 
-	// Update viewport for scrolling
-	m.state.queueMessageDetails.viewport, cmd = m.state.queueMessageDetails.viewport.Update(msg)
+	d.viewport, cmd = d.viewport.Update(msg)
 	return m, cmd
 }
 
-func (m model) QueueMessageDetailsView() string {
-	return m.renderMessageDetails()
+// systemAttributes are the message attributes the left panel already shows in its own rows.
+var systemAttributes = []string{
+	"SentTimestamp", "ApproximateFirstReceiveTimestamp", "ApproximateReceiveCount",
+	"MessageGroupId", "MessageDeduplicationId", "SequenceNumber",
 }
 
-func (m model) renderMessageDetails() string {
-	msg := m.state.queueMessageDetails.message
+func (m model) QueueMessageDetailsView() string {
+	d := m.state.queueMessageDetails
+	msg := d.message
 
-	const (
-		leftPanelWidth   = detailsLeftPanelWidth
-		leftContentWidth = leftPanelWidth - 4 // Account for padding (4)
-		labelWidth       = 16
-		valueWidth       = leftContentWidth - labelWidth - 2
-	)
-
-	labelStyle := lipgloss.NewStyle().
-		Foreground(styles.MediumGray).
-		Width(labelWidth).
-		Align(lipgloss.Right).
-		PaddingRight(2)
-
-	valueStyle := lipgloss.NewStyle().
-		Foreground(styles.TextLight).
-		Width(valueWidth)
-
-	sectionHeader := lipgloss.NewStyle().
-		Foreground(styles.TextLight).
-		Bold(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		BorderForeground(styles.BorderColor).
-		Width(leftContentWidth)
-
-	row := func(label, value string) string {
-		return lipgloss.JoinHorizontal(lipgloss.Top,
-			labelStyle.Render(label),
-			valueStyle.Render(value),
-		)
+	kind := "standard"
+	if d.isFifo {
+		kind = "fifo"
+	}
+	timestamp := func(s string) []styles.Span {
+		t := parseTime(s)
+		if t.IsZero() {
+			return []styles.Span{styles.S("-", styles.ToneFaint)}
+		}
+		return []styles.Span{styles.S(formatTime(t), styles.ToneBody), styles.S("  "+formatAgo(t), styles.ToneFaint)}
+	}
+	receives := styles.S(orDash(msg.ReceiveCount), styles.ToneBody)
+	if atoi(msg.ReceiveCount) > 1 {
+		receives.Tone = styles.ToneWarning
 	}
 
-	// Left panel - queue information first
-	var leftSections []string
-	leftSections = append(leftSections, sectionHeader.Render("Queue Information"))
-	leftSections = append(leftSections, row("Queue Name", m.state.queueMessageDetails.queueName))
-	queueType := "Standard"
-	if m.state.queueMessageDetails.isFifo {
-		queueType = "FIFO"
+	left := []string{
+		panelSection("queue", true, leftContentWidth),
+		panelRowSpans("name", styles.S(d.queueName, styles.ToneText)),
+		panelRow("type", kind),
+		"",
+		panelSection("message", true, leftContentWidth),
+		panelRowSpans("id", styles.S(msg.MessageID, styles.ToneText)),
+		panelRowSpans("sent", timestamp(msg.SentTimestamp)...),
+		panelRowSpans("first received", timestamp(msg.FirstReceiveTime)...),
+		panelRowSpans("receives", receives),
+		panelRow("size", formatBytes(uint64(len(msg.Body)))),
+		panelRowSpans("md5", styles.S(msg.MD5OfBody, styles.ToneMuted)),
 	}
-	leftSections = append(leftSections, row("Queue Type", queueType))
-
-	// Message metadata
-	leftSections = append(leftSections, sectionHeader.MarginTop(1).Render("Basic Information"))
-	leftSections = append(leftSections, row("Message ID", msg.MessageID))
-	leftSections = append(leftSections, row("Sent", msg.SentTimestamp))
-	if msg.FirstReceiveTime != "" {
-		leftSections = append(leftSections, row("First Received", msg.FirstReceiveTime))
-	}
-	leftSections = append(leftSections, row("Receive Count", msg.ReceiveCount))
-	leftSections = append(leftSections, row("Body Size", fmt.Sprintf("%d bytes", len(msg.Body))))
-	leftSections = append(leftSections, row("MD5", msg.MD5OfBody))
 
 	if msg.MessageGroupID != "" || msg.MessageDeduplicationID != "" || msg.SequenceNumber != "" {
-		leftSections = append(leftSections, sectionHeader.MarginTop(1).Render("FIFO Attributes"))
+		left = append(left, "", panelSection("fifo", true, leftContentWidth))
 		if msg.MessageGroupID != "" {
-			leftSections = append(leftSections, row("Group ID", msg.MessageGroupID))
+			left = append(left, panelRow("group id", msg.MessageGroupID))
 		}
 		if msg.MessageDeduplicationID != "" {
-			leftSections = append(leftSections, row("Dedup ID", msg.MessageDeduplicationID))
+			left = append(left, panelRow("deduplication id", msg.MessageDeduplicationID))
 		}
 		if msg.SequenceNumber != "" {
-			leftSections = append(leftSections, row("Sequence", msg.SequenceNumber))
+			left = append(left, panelRow("sequence", msg.SequenceNumber))
 		}
 	}
 
-	if len(msg.MessageAttributes) > 0 {
-		leftSections = append(leftSections, sectionHeader.MarginTop(1).Render("Custom Attributes"))
-		for name, value := range msg.MessageAttributes {
-			leftSections = append(leftSections, row(name, value))
+	left = append(left, "", styles.SectionHeaderWith(styles.Bold("attributes"), styles.Faint(fmt.Sprint(len(msg.MessageAttributes))), leftContentWidth))
+	left = append(left, attributeRows(msg.MessageAttributes, contentHeight-len(left)-2)...)
+
+	var system []string
+	for name := range msg.Attributes {
+		if !slices.Contains(systemAttributes, name) {
+			system = append(system, name)
+		}
+	}
+	if len(system) > 0 {
+		slices.Sort(system)
+		left = append(left, "", panelSection("system attributes", true, leftContentWidth))
+		for _, name := range system {
+			left = append(left, panelRow(name, msg.Attributes[name]))
 		}
 	}
 
-	var sysAttrs []string
-	skip := map[string]bool{
-		"SentTimestamp": true, "ApproximateFirstReceiveTimestamp": true,
-		"ApproximateReceiveCount": true, "MessageGroupId": true,
-		"MessageDeduplicationId": true, "SequenceNumber": true,
+	vp := d.viewport
+	meta := d.kind
+	if vp.TotalLineCount() > vp.Height() {
+		meta += fmt.Sprintf(" · %d%%", int(vp.ScrollPercent()*100))
 	}
-	for name, value := range msg.Attributes {
-		if !skip[name] {
-			sysAttrs = append(sysAttrs, row(name, value))
-		}
-	}
-	if len(sysAttrs) > 0 {
-		leftSections = append(leftSections, sectionHeader.MarginTop(1).Render("System Attributes"))
-		leftSections = append(leftSections, sysAttrs...)
-	}
-
-	leftPanelStyle := lipgloss.NewStyle().
-		PaddingLeft(2).
-		PaddingRight(2).
-		Width(leftPanelWidth).
-		Height(contentHeight)
-
-	leftPanel := leftPanelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, leftSections...))
-
-	// Vertical divider - create full height line
-	var dividerLines string
-	for i := 0; i < contentHeight; i++ {
-		dividerLines += "│"
-		if i < contentHeight-1 {
-			dividerLines += "\n"
-		}
-	}
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(styles.BorderColor)
-
-	divider := dividerStyle.Render(dividerLines)
-
-	// Right panel - message body with viewport
-	bodyHeaderStyle := lipgloss.NewStyle().
-		Foreground(styles.TextLight).
-		Bold(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		BorderForeground(styles.BorderColor).
-		Width(detailsRightContentWidth).
-		MarginBottom(1)
-
-	rightPanelStyle := lipgloss.NewStyle().
-		PaddingLeft(2).
-		PaddingRight(2).
-		Width(detailsRightPanelWidth).
-		Height(contentHeight)
-
-	rightContent := lipgloss.JoinVertical(lipgloss.Left,
-		bodyHeaderStyle.Render("Message Body"),
-		m.state.queueMessageDetails.viewport.View(),
-	)
-	rightPanel := rightPanelStyle.Render(rightContent)
-
-	// Join panels horizontally with divider
-	content := lipgloss.JoinHorizontal(lipgloss.Top,
-		leftPanel,
-		divider,
-		rightPanel,
+	right := lipgloss.JoinVertical(lipgloss.Left,
+		styles.SectionHeaderWith(styles.Bold("body"), styles.Faint(meta), rightContentWidth),
+		"",
+		vp.View(),
 	)
 
-	return lipgloss.PlaceHorizontal(contentWidth, lipgloss.Center, content)
+	return splitPanels(lipgloss.JoinVertical(lipgloss.Left, left...), right)
+}
+
+// attributeRows lists the message attributes on one line each, in at most rows lines, with the
+// ones past them counted.
+func attributeRows(attrs map[string]string, rows int) []string {
+	if len(attrs) == 0 {
+		return []string{panelRowSpans("", styles.S("no attributes", styles.ToneFaint))}
+	}
+	names := make([]string, 0, len(attrs))
+	for name := range attrs {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+
+	shown := names
+	if rows = max(rows, 1); len(names) > rows {
+		shown = names[:rows-1]
+	}
+	lines := make([]string, 0, len(shown)+1)
+	for _, name := range shown {
+		lines = append(lines, panelRow(name, attrs[name]))
+	}
+	if more := len(names) - len(shown); more > 0 {
+		lines = append(lines, panelRowSpans("", styles.S(fmt.Sprintf("+%d more attributes", more), styles.ToneFaint)))
+	}
+	return lines
 }

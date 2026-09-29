@@ -8,6 +8,12 @@ ACCOUNT_ID="${ACCOUNT_ID:-000000000000}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 for file in "$SCRIPT_DIR"/queues/*.json; do
+  queue_name=$(jq -r '.queue.name' "$file")
+  if aws sqs get-queue-url --queue-name "$queue_name" >/dev/null 2>&1; then
+    echo "Queue $queue_name already exists, skipping"
+    continue
+  fi
+
   # --- Create deadletter queue ---
   dlq_name=$(jq -r '.deadletter.name // empty' "$file")
   if [ -n "$dlq_name" ]; then
@@ -20,7 +26,6 @@ for file in "$SCRIPT_DIR"/queues/*.json; do
   fi
 
   # --- Create main queue ---
-  queue_name=$(jq -r '.queue.name' "$file")
   max_receive=$(jq -r '.deadletter.maxReceiveCount // empty' "$file")
 
   base_attrs=$(jq -c '.queue.attributes // {}' "$file")
