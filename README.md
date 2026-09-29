@@ -112,37 +112,30 @@ The aws profile, region and endpoint come from the environment and the shared aw
 Kue uses [LocalStack](https://www.localstack.cloud/) running in Docker to simulate AWS SQS locally. This allows you to develop and test without connecting to real AWS services.
 
 - [docker](https://www.docker.com/)
-- [localstack](https://www.localstack.cloud/)
+- [aws cli](https://aws.amazon.com/cli/)
+- [jq](https://jqlang.org/)
 - [earthly](https://earthly.dev/)
+- [vhs](https://github.com/charmbracelet/vhs) with `ffmpeg` and `ttyd`, only to record the readme gif and screenshots
 - [go](https://go.dev/) 1.26+
 
 ```bash
-docker run --rm -d \
-  --name localstack \
-  -p 4566:4566 \
-  -e SERVICES=sqs \
-  localstack/localstack
+docker compose up -d
 ```
 
+The compose file pins `localstack/localstack:4.14.0`, the last community release. Later images quit on start without a `LOCALSTACK_AUTH_TOKEN`.
+
+The project includes an [Earthfile](./Earthfile) with targets to quickly set up sample SQS queues and messages for development. They point the aws cli at LocalStack with its `test` credentials, so your own aws profile is never used.
+
+**create sample queues and messages**
+
 ```bash
-export AWS_ENDPOINT_URL=http://localhost:4566
-export AWS_ACCESS_KEY_ID=default
-export AWS_SECRET_ACCESS_KEY=default
-export AWS_DEFAULT_REGION=us-east-1
+earthly +seed
 ```
 
-The project includes an [Earthfile](./Earthfile) with targets to quickly set up sample SQS queues and messages for development.
-
-**create sample queues**
+**list the queues**
 
 ```bash
-earthly +queues
-```
-
-**send sample messages**
-
-```bash
-earthly +messages
+earthly +list
 ```
 
 To show the changes made in the repository readme, the following command can be ran which automatically creates the preview gif & screenshots:
@@ -151,13 +144,16 @@ To show the changes made in the repository readme, the following command can be 
 earthly +vhs
 ```
 
-### running kontrolplan/kue locally
+### running kontrolplane/kue locally
 
-After setting up LocalStack and creating sample resources build and run:
+Start LocalStack, create the sample resources, build and run in one go:
 
 ```bash
-earthly +local && ./build/kontrolplane/kue
+earthly +dev
+AWS_ENDPOINT_URL=http://localhost:4566 AWS_REGION=us-east-1 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test ./build/kontrolplane/kue
 ```
+
+Seeding skips queues that already exist, so this can be rerun. LocalStack keeps nothing across restarts, so `docker compose restart` starts from scratch.
 
 ## contributors
 

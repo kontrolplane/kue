@@ -2,58 +2,56 @@ Set FontSize 20
 Set Width 2000
 Set Height 1000
 Set BorderRadius 10
+Set TypingSpeed 100ms
 
 Output ./assets/cassette.gif
 
 Hide
-  Type "go build -o build/kontrolplane/kue main.go & clear"
+  Type@10ms "go build -o build/kontrolplane/kue . && clear && ./build/kontrolplane/kue"
   Enter
-  Copy "./build/kontrolplane/kue"
-  Paste
-  Enter
+  Wait+Screen@60s /kontrolplane-users/
+  Sleep 1s
 Show
 
-Sleep 10s
+Sleep 6s
 
 Screenshot ./assets/pages/queue/overview.png
 
+Sleep 4s
+Down
 Sleep 2s
 Enter
-Sleep 3s
-Down
 Sleep 5s
-Down
+Down@800ms 2
 
-Sleep 8s
+Sleep 5s
 
 Screenshot ./assets/pages/queue/details.png
 
-Sleep 8s
+Sleep 4s
 Enter
 
-Sleep 8s
+Sleep 6s
 
 Screenshot ./assets/pages/message/details.png
 
-Sleep 2s
-
+Sleep 4s
 Type "q"
 
-Sleep 3s
+Sleep 4s
 Ctrl+N
 Sleep 4s
 Type '{"userId": "20319", "action": "create", "timestamp": "2025-01-01T12:00:00Z"}'
-Sleep 8s
-Tab
-Sleep 2s
-Tab
+Sleep 5s
+Tab@1s 2
 
 Sleep 2s
 
 Screenshot ./assets/pages/message/creation.png
 
-Enter
 Sleep 2s
+Enter
+Sleep 5s
 
 Ctrl+D
 Sleep 4s
@@ -65,6 +63,7 @@ Screenshot ./assets/pages/message/delete.png
 
 Sleep 2s
 Enter
+Sleep 4s
 
 Type "q"
 
@@ -79,51 +78,47 @@ Sleep 3s
 
 Screenshot ./assets/pages/queue/creation-01.png
 
-Sleep 5s
+Sleep 4s
 Enter
-Sleep 5s
-Enter
+Sleep 2s
+Type "60"
 Sleep 3s
 
 Screenshot ./assets/pages/queue/creation-02.png
 
 Sleep 3s
-Enter
-Sleep 2s
-Enter
-Sleep 2s
+Enter@1s 3
+Sleep 3s
 
 Screenshot ./assets/pages/queue/creation-03.png
 
+Sleep 3s
+Enter@1s 2
 Sleep 2s
-Enter
-Sleep 2s
-Enter
-Sleep 4s
-Enter
-Sleep 2s
+Right
+Sleep 3s
 
 Screenshot ./assets/pages/queue/creation-04.png
 
 Sleep 3s
-Enter
-Sleep 2s
-Enter
-Sleep 2s
-Enter
+Enter@1s 3
+Sleep 6s
 
-Sleep 1s
-Down
-Sleep 1s
+Type "/"
+Sleep 2s
+Type "demonstration"
+Sleep 2s
+Enter
+Sleep 3s
 Ctrl+D
-Sleep 2s
-Right
-Sleep 2s
+Sleep 3s
+Type "kontrolplane-demonstration.fifo"
+Sleep 3s
 
 Screenshot ./assets/pages/queue/delete.png
 
 Sleep 2s
 Enter
-Sleep 1s
-
-Sleep 15s
+Sleep 5s
+Escape
+Sleep 6s
