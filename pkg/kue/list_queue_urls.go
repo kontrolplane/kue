@@ -29,7 +29,7 @@ func ListQueuesUrls(client *sqs.Client, ctx context.Context) (queues []Queue, er
 	}
 
 	if len(queues) == 0 {
-		return nil, fmt.Errorf("No queues found")
+		return nil, fmt.Errorf("no queues found")
 	}
 
 	return queues, nil

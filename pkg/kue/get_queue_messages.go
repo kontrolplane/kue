@@ -17,8 +17,8 @@ func FetchQueueMessages(client *sqs.Client, ctx context.Context, queueUrl string
 		MaxNumberOfMessages:   maxMessages,
 		VisibilityTimeout:     1, // Minimal visibility timeout to keep messages visible
 		MessageAttributeNames: []string{"All"},
-		AttributeNames: []types.QueueAttributeName{
-			types.QueueAttributeNameAll,
+		MessageSystemAttributeNames: []types.MessageSystemAttributeName{
+			types.MessageSystemAttributeNameAll,
 		},
 	}
 
@@ -89,5 +89,3 @@ func FetchQueueMessages(client *sqs.Client, ctx context.Context, queueUrl string
 
 	return messages, nil
 }
-
-
