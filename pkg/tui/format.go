@@ -43,10 +43,8 @@ func formatAgo(t time.Time) string {
 	if t.IsZero() {
 		return "never"
 	}
-	d := time.Since(t)
+	d := max(time.Since(t), 0) // a clock running ahead reads as 0s ago
 	switch {
-	case d < 0:
-		return "just now"
 	case d < time.Minute:
 		return fmt.Sprintf("%ds ago", int(d.Seconds()))
 	case d < time.Hour:
@@ -338,13 +336,14 @@ func tableCount(n uint64, tone styles.Tone) cell {
 	return text(compactCount(n), tone)
 }
 
-// lastActivity renders how long ago something happened, lit up while it is still fresh.
+// lastActivity renders how long ago something happened, lit up while it is still fresh. A fresh
+// time is padded to the width of "59s ago" so the dots line up in a right-aligned column.
 func lastActivity(t time.Time) cell {
 	switch {
 	case t.IsZero():
 		return text("-", styles.ToneFaint)
 	case time.Since(t) < time.Minute:
-		return cell{styles.S("● ", styles.ToneSuccess), styles.S(formatAgo(t), styles.ToneBody)}
+		return cell{styles.S("● ", styles.ToneSuccess), styles.S(fmt.Sprintf("%7s", formatAgo(t)), styles.ToneBody)}
 	default:
 		return text(formatAgo(t), styles.ToneMuted)
 	}

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -44,16 +45,17 @@ func (m model) getFilteredQueues() []kue.Queue {
 	return filterBy(o.queues, o.filterText, queueMatches)
 }
 
-// queueType renders whether a queue is standard or fifo, and marks the dead-letter queues.
+// queueType renders whether a queue is standard or fifo, and marks the dead-letter queues. The
+// type is padded to the width of "standard" so the dlq marks line up down the column.
 func queueType(queues []kue.Queue, q kue.Queue) cell {
-	c := text("standard", styles.ToneBody)
+	kind := "standard"
 	if q.FifoQueue == "true" {
-		c = text("fifo", styles.ToneBody)
+		kind = "fifo"
 	}
-	if isDeadLetter(queues, q) {
-		c = append(c, styles.S(" dlq", styles.ToneWarning))
+	if !isDeadLetter(queues, q) {
+		return text(kind, styles.ToneBody)
 	}
-	return c
+	return cell{styles.S(fmt.Sprintf("%-8s", kind), styles.ToneBody), styles.S(" dlq", styles.ToneWarning)}
 }
 
 func (m model) updateQueueOverviewTable() model {
