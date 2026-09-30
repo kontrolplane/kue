@@ -15,6 +15,9 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
@@ -23,7 +26,7 @@ builds:
     binary: kue
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
@@ -31,13 +34,40 @@ archives:
       {{- .Arch }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
+
+sboms:
+  - artifacts: archive
 
 checksum:
   name_template: "checksums.txt"
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
+
+homebrew_casks:
+  - name: kue
+    binaries:
+      - kue
+    repository:
+      owner: kontrolplane
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: https://kontrolplane.dev/projects/#kue
+    description: "A terminal user interface (TUI) for working with Amazon Web Services Simple Queue Service."
+    license: MIT
+    commit_author:
+      name: kontrolplane-bot
+      email: bot@kontrolplane.dev
+    commit_msg_template: "{{ .ProjectName }}: update to {{ .Tag }}"
+    skip_upload: auto
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kue"]
+          end
 
 changelog:
   sort: asc
