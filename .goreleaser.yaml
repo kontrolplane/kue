@@ -58,8 +58,7 @@ homebrew_casks:
     description: "A terminal user interface (TUI) for working with Amazon Web Services Simple Queue Service."
     license: MIT
     commit_author:
-      name: kontrolplane-bot
-      email: bot@kontrolplane.dev
+      use_github_app_token: true
     commit_msg_template: "{{ .ProjectName }}: update to {{ .Tag }}"
     skip_upload: auto
     hooks:
