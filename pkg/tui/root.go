@@ -542,11 +542,10 @@ func (m model) render() string {
 		frame(styles.Render(m.breadcrumb()...), meta, foot, c) + "\n" +
 		m.renderFooter()
 
-	placed := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainView)
-	if m.width > 0 {
-		placed = clip(placed, m.width, m.height)
+	if m.width == 0 {
+		return mainView
 	}
-	return placed
+	return place(m.width, m.height, mainView)
 }
 
 // content renders what the frame holds: the page, or the error, loading or help in its place.
@@ -685,12 +684,21 @@ func (m model) renderFilterBar(inputView string) string {
 // fitHints renders the hints that fit width. Hints are dropped from the end but for the last two,
 // help and back or quit, which stay.
 func fitHints(width int, pairs ...[2]string) string {
-	pairs = slices.Clone(pairs)
-	for len(pairs) > 2 && lipgloss.Width(hints(pairs...)) > width {
-		pairs = slices.Delete(pairs, len(pairs)-3, len(pairs)-2)
+	var key strings.Builder
+	fmt.Fprint(&key, width)
+	for _, p := range pairs {
+		key.WriteString("\x00" + p[0] + "\x00" + p[1])
 	}
-	return hints(pairs...)
+	return hintsMemo.get(key.String(), func() string {
+		pairs = slices.Clone(pairs)
+		for len(pairs) > 2 && styledWidth(hints(pairs...)) > width {
+			pairs = slices.Delete(pairs, len(pairs)-3, len(pairs)-2)
+		}
+		return hints(pairs...)
+	})
 }
+
+var hintsMemo memo
 
 func hints(pairs ...[2]string) string {
 	parts := make([]string, len(pairs))

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -14,7 +15,7 @@ import (
 
 // spread places left and right on one line of the given width.
 func spread(left, right string, width int) string {
-	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
+	gap := width - styledWidth(left) - styledWidth(right)
 	if gap < 1 {
 		gap = 1
 	}
@@ -73,16 +74,33 @@ func (m model) renderHeader() string {
 	}
 	top := spread(brand, styles.Render(status...), width)
 
-	facts := factsGrid(width, m.connectionFacts(), m.accountFacts(), m.queueFacts(formatCount), m.messageFacts(formatCount))
-	if facts == "" {
-		facts = factsGrid(width, m.connectionFacts(), m.accountFacts(), m.queueFacts(compactCount), m.messageFacts(compactCount))
+	// The facts only change with a refresh, while the header is drawn on every frame.
+	var key strings.Builder
+	fmt.Fprint(&key, width)
+	for _, facts := range [][]headerFact{m.connectionFacts(), m.accountFacts(), m.queueFacts(formatCount), m.messageFacts(formatCount)} {
+		key.WriteString("\x01")
+		for _, f := range facts {
+			key.WriteString("\x00" + f.label)
+			for _, s := range f.value {
+				fmt.Fprintf(&key, "\x00%s\x00%d%v", s.Text, s.Tone, s.Bold)
+			}
+		}
 	}
-	if facts == "" {
-		facts = factsGrid(-1, m.connectionFacts(), m.queueFacts(compactCount), m.messageFacts(compactCount))
-	}
+	facts := headerMemo.get(key.String(), func() string {
+		facts := factsGrid(width, m.connectionFacts(), m.accountFacts(), m.queueFacts(formatCount), m.messageFacts(formatCount))
+		if facts == "" {
+			facts = factsGrid(width, m.connectionFacts(), m.accountFacts(), m.queueFacts(compactCount), m.messageFacts(compactCount))
+		}
+		if facts == "" {
+			facts = factsGrid(-1, m.connectionFacts(), m.queueFacts(compactCount), m.messageFacts(compactCount))
+		}
+		return lipgloss.NewStyle().MarginLeft(headerIndent).Render(facts)
+	})
 
-	return indent + top + "\n" + lipgloss.NewStyle().MarginLeft(headerIndent).Render(facts)
+	return indent + top + "\n" + facts
 }
+
+var headerMemo memo
 
 // factsGrid lays the fact columns out across width, or returns "" when they do not fit. Spare
 // room goes between the columns so the grid spans the header like the line above it. Without
@@ -286,7 +304,7 @@ func clip(s string, width, height int) string {
 		lines = lines[:max(height, 0)]
 	}
 	for i, line := range lines {
-		if ansi.StringWidth(line) > width {
+		if styledWidth(line) > width {
 			lines[i] = ansi.Truncate(line, width, "…")
 		}
 	}
@@ -320,18 +338,39 @@ func frame(title, meta, foot, body string) string {
 	}
 	bottom := border.Render("╰") + edge(frameWidth-3-footWidth) + foot + border.Render("─╯")
 
-	placed := lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Top, clip(body, contentWidth, contentHeight))
-	lines := append([]string{""}, strings.Split(placed, "\n")...)
-	lines = append(lines, "")
+	// The body fills the content area: cut to it, with every line centred in it as lipgloss.Place
+	// would, and a blank line above and below. Each line is measured once, this runs every frame.
+	lines := strings.Split(body, "\n")
+	lines = lines[:min(len(lines), contentHeight)]
+	side := border.Render("│")
+	blank := side + strings.Repeat(" ", contentWidth) + side
 
 	var b strings.Builder
+	b.Grow(len(body) + (contentHeight+4)*(contentWidth+40))
 	b.WriteString(top)
-	for _, line := range lines {
+	b.WriteString("\n")
+	b.WriteString(blank)
+	for i := range contentHeight {
 		b.WriteString("\n")
-		b.WriteString(border.Render("│"))
-		b.WriteString(line + strings.Repeat(" ", max(0, contentWidth-lipgloss.Width(line))))
-		b.WriteString(border.Render("│"))
+		b.WriteString(side)
+		if i >= len(lines) {
+			b.WriteString(strings.Repeat(" ", contentWidth))
+		} else {
+			line := lines[i]
+			w := styledWidth(line)
+			if w > contentWidth {
+				line = ansi.Truncate(line, contentWidth, "…")
+				w = styledWidth(line)
+			}
+			gap := max(0, contentWidth-w)
+			b.WriteString(strings.Repeat(" ", gap/2))
+			b.WriteString(line)
+			b.WriteString(strings.Repeat(" ", gap-gap/2))
+		}
+		b.WriteString(side)
 	}
+	b.WriteString("\n")
+	b.WriteString(blank)
 	b.WriteString("\n")
 	b.WriteString(bottom)
 	return b.String()
