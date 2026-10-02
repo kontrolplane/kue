@@ -465,7 +465,7 @@ func TestBuildQueueConfig(t *testing.T) {
 func TestHelpAndErrorDismiss(t *testing.T) {
 	m := loadedModel(t)
 	m, _ = update(t, m, press("?"))
-	if !m.showHelp || !strings.Contains(ansi.Strip(m.render()), "navigation") {
+	if !m.showHelp || !strings.Contains(ansi.Strip(m.render()), "new queue") {
 		t.Fatal("expected ? to show the help")
 	}
 	m, _ = update(t, m, press("j"))

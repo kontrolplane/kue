@@ -548,45 +548,67 @@ func (m model) render() string {
 	return place(m.width, m.height, mainView)
 }
 
-// content renders what the frame holds: the page, or the error, loading or help in its place.
+// content renders what the frame holds: the page, with the help or an error over it, or the
+// loading notice in its place.
 func (m model) content() string {
-	var c string
-
+	page := m.pageView()
 	switch {
+	case m.showHelp:
+		return overlay(page, m.renderHelp())
 	case m.error != "":
-		c = m.ErrorView()
-	case m.loading:
-		c = m.LoadingView()
-	default:
-		switch m.page {
-		case queueOverview:
-			c = m.QueueOverviewView()
-		case queueDetails:
-			c = m.QueueDetailsView()
-		case queueCreate:
-			c = m.QueueCreateView()
-		case queueDelete:
-			c = m.QueueDeleteView()
-		case queuePurge:
-			c = m.QueuePurgeView()
-		case queueRedrive:
-			c = m.QueueRedriveView()
-		case queueMessageDetails:
-			c = m.QueueMessageDetailsView()
-		case queueMessageDelete:
-			c = m.QueueMessageDeleteView()
-		case queueMessageCreate:
-			c = m.QueueMessageCreateView()
-		default:
-			c = errNoPageSelected
+		return overlay(page, m.ErrorView())
+	}
+	return page
+}
+
+// pageView renders the current page. A dialog is set over the page it was opened from.
+func (m model) pageView() string {
+	if m.loading {
+		return m.LoadingView()
+	}
+	switch m.page {
+	case queueOverview:
+		return m.QueueOverviewView()
+	case queueDetails:
+		return m.QueueDetailsView()
+	case queueCreate:
+		return m.QueueCreateView()
+	case queueDelete:
+		return overlay(m.backdrop(), m.QueueDeleteView())
+	case queuePurge:
+		return overlay(m.backdrop(), m.QueuePurgeView())
+	case queueRedrive:
+		return overlay(m.backdrop(), m.QueueRedriveView())
+	case queueMessageDetails:
+		return m.QueueMessageDetailsView()
+	case queueMessageDelete:
+		return overlay(m.backdrop(), m.QueueMessageDeleteView())
+	case queueMessageCreate:
+		return m.QueueMessageCreateView()
+	}
+	return errNoPageSelected
+}
+
+// backdrop renders the page the current dialog was opened from, and goes back to.
+func (m model) backdrop() string {
+	from := queueOverview
+	switch m.page {
+	case queuePurge:
+		if !m.state.queuePurge.fromOverview {
+			from = queueDetails
+		}
+	case queueRedrive:
+		if !m.state.queueRedrive.fromOverview {
+			from = queueDetails
+		}
+	case queueMessageDelete:
+		from = queueDetails
+		if m.state.queueMessageDelete.fromDetails {
+			from = queueMessageDetails
 		}
 	}
-
-	if m.showHelp {
-		c = m.renderHelpOverlay()
-	}
-
-	return c
+	m.page = from
+	return m.pageView()
 }
 
 func (m model) LoadingView() string {
@@ -740,58 +762,134 @@ func (m model) shortHelp() [][2]string {
 	return shortHelp[m.page]
 }
 
-// renderHelpOverlay draws the key reference in a card, as roomy as the content area allows.
-func (m model) renderHelpOverlay() string {
-	var overlay string
-	for _, fit := range []struct{ padY, padX, gap int }{{1, 4, 6}, {1, 2, 3}, {0, 2, 3}} {
-		overlay = lipgloss.NewStyle().
+// renderHelp draws the key reference in a card, as roomy as the content area allows.
+func (m model) renderHelp() string {
+	var card string
+	for _, fit := range []struct{ padY, padX, gap int }{{1, 4, 5}, {1, 2, 3}, {0, 2, 3}} {
+		card = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(styles.P.RuleBold).
 			Padding(fit.padY, fit.padX).
-			Render(m.renderHelpContent(fit.gap))
-		if lipgloss.Width(overlay) <= contentWidth && lipgloss.Height(overlay) <= contentHeight {
+			Render(renderHelpContent(m.currentHelp(), contentWidth-4-2*fit.padX, contentHeight-2-2*fit.padY, fit.gap))
+		if lipgloss.Width(card) <= contentWidth-2 && lipgloss.Height(card) <= contentHeight {
 			break
 		}
 	}
-	return lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, overlay)
+	return card
 }
 
-// renderHelpContent lays the help out in two columns.
-func (m model) renderHelpContent(gap int) string {
-	title := func(s string) string {
-		return styles.Fg(styles.ToneAccent).Bold(true).MarginBottom(1).Render(s)
+// helpSection is a column of the key reference, for the pages it lists the keys of.
+type helpSection struct {
+	title string
+	pages []page
+	rows  [][2]string
+}
+
+var helpSections = []helpSection{
+	{"queues", []page{queueOverview}, [][2]string{
+		{"↑/k ↓/j", "move"},
+		{"g / G", "first / last"},
+		{"enter", "open queue"},
+		{"space", "select"},
+		{"ctrl+n", "new queue"},
+		{"ctrl+d", "delete"},
+		{"ctrl+p", "purge"},
+		{"ctrl+r", "redrive dead-letter"},
+		{"/", "filter"},
+		{"r / p", "refresh / pause"},
+		{"q", "quit"},
+	}},
+	{"queue", []page{queueDetails}, [][2]string{
+		{"↑/k ↓/j", "move"},
+		{"enter", "open message"},
+		{"space", "select"},
+		{"ctrl+n", "send message"},
+		{"ctrl+d", "delete"},
+		{"ctrl+p", "purge"},
+		{"ctrl+r", "redrive dead-letter"},
+		{"c", "copy arn"},
+		{"/", "filter"},
+		{"r / p", "refresh / pause"},
+		{"esc / q", "back"},
+	}},
+	{"message", []page{queueMessageDetails}, [][2]string{
+		{"↑/↓ g/G", "scroll"},
+		{"tab", "attributes / body"},
+		{"c", "copy body"},
+		{"ctrl+d", "delete"},
+		{"esc / q", "back"},
+	}},
+	{"forms and dialogs", []page{queueCreate, queueDelete, queuePurge, queueRedrive, queueMessageCreate, queueMessageDelete}, [][2]string{
+		{"tab/⇧tab", "next / previous field"},
+		{"ctrl+s", "send a message"},
+		{"y / n", "answer a dialog"},
+		{"←/→", "choose"},
+		{"enter", "confirm"},
+		{"esc", "cancel"},
+		{"ctrl+c", "quit"},
+	}},
+}
+
+// currentHelp is the index of the help section that lists the keys of the current page.
+func (m model) currentHelp() int {
+	for i, s := range helpSections {
+		if slices.Contains(s.pages, m.page) {
+			return i
+		}
+	}
+	return 0
+}
+
+// renderHelpContent lays the sections out with the current one first: side by side when they fit
+// width, else in rows of two, else the current one next to the forms, else on its own.
+func renderHelpContent(current, width, height, gap int) string {
+	title := func(s string, on bool) string {
+		tone := styles.ToneMuted
+		if on {
+			tone = styles.ToneAccent
+		}
+		return styles.Fg(tone).Bold(true).MarginBottom(1).Render(s)
 	}
 	keyStyle := styles.Fg(styles.ToneText).Bold(true).Width(11)
-	row := func(key, desc string) string {
-		return keyStyle.Render(key) + styles.Muted(desc)
+	column := func(i int) string {
+		s := helpSections[i]
+		lines := []string{title(s.title, i == current)}
+		for _, r := range s.rows {
+			lines = append(lines, keyStyle.Render(r[0])+styles.Muted(r[1]))
+		}
+		return lipgloss.JoinVertical(lipgloss.Left, lines...)
 	}
 
-	navigation := lipgloss.JoinVertical(lipgloss.Left,
-		title("navigation"),
-		row("↑/k ↓/j", "move"),
-		row("g / G", "first / last"),
-		row("pgup/pgdn", "page"),
-		row("enter", "open"),
-		row("tab/⇧tab", "next / previous field"),
-		row("y / n", "answer a dialog"),
-		row("q", "back, quit"),
-		row("esc", "back, clear filter"),
-		row("ctrl+c", "quit"),
-	)
+	columns := []string{column(current)}
+	for i := range helpSections {
+		if i != current {
+			columns = append(columns, column(i))
+		}
+	}
+	spaced := lipgloss.NewStyle().MarginRight(gap)
+	row := func(cols ...string) string {
+		for i := range cols[:len(cols)-1] {
+			cols[i] = spaced.Render(cols[i])
+		}
+		return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	}
+	fits := func(s string) bool { return lipgloss.Width(s) <= width && lipgloss.Height(s) <= height-2 }
 
-	actions := lipgloss.JoinVertical(lipgloss.Left,
-		title("actions"),
-		row("space", "select"),
-		row("c", "copy body or arn"),
-		row("ctrl+n", "new queue, send message"),
-		row("ctrl+d", "delete"),
-		row("ctrl+p", "purge"),
-		row("ctrl+r", "redrive dead-letter queue"),
-		row("r / p", "refresh / pause"),
-		row("/", "filter"),
-		row("?", "help"),
-	)
-
-	columns := lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().MarginRight(gap).Render(navigation), actions)
-	return lipgloss.JoinVertical(lipgloss.Center, columns, "", styles.Faint("press any key to close"))
+	general := columns[len(columns)-1]
+	if current == len(helpSections)-1 {
+		general = columns[1]
+	}
+	layouts := []string{
+		row(slices.Clone(columns)...),
+		lipgloss.JoinVertical(lipgloss.Left, row(columns[0], columns[1]), "", row(columns[2], columns[3])),
+		row(columns[0], general),
+	}
+	body := columns[0]
+	for _, l := range layouts {
+		if fits(l) {
+			body = l
+			break
+		}
+	}
+	return lipgloss.JoinVertical(lipgloss.Center, body, "", styles.Faint("press any key to close"))
 }

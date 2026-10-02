@@ -71,8 +71,9 @@ func dialogName(name string) string {
 	return truncate(name, 48)
 }
 
-// dialog renders a card with a toned edge, used for confirmations and errors. Lines wider than
-// the card wraps, and the card gives up its inner margin when it would not fit the height.
+// dialog renders a card with a toned edge, used for confirmations and errors, to be set over a
+// page with overlay. Lines wider than the card wraps, and the card gives up its inner margin when
+// it would not fit the height.
 func dialog(title string, tone styles.Tone, body ...string) string {
 	heading := styles.Render(styles.B("▲ ", tone), styles.B(title, tone))
 	width := dialogTextWidth()
@@ -95,7 +96,26 @@ func dialog(title string, tone styles.Tone, body ...string) string {
 		BorderForeground(styles.P.Color(tone)).
 		Padding(padY, dialogPadX).
 		Render(content)
-	return lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, card)
+	return card
+}
+
+// overlay sets card in the middle of the content area, over the page, which recedes behind it, so
+// a dialog keeps what it acts on in sight.
+func overlay(page, card string) string {
+	lines := strings.Split(ansi.Strip(page), "\n")
+	dim := sgr(styles.P.Rule, false, nil)
+	for i, l := range lines {
+		lines[i] = dim + l + ansi.ResetStyle
+	}
+	// A ring of blank cells keeps the page's text off the card's edge.
+	card = lipgloss.NewStyle().Padding(0, 1).Render(card)
+	w, h := lipgloss.Width(card), lipgloss.Height(card)
+	c := lipgloss.NewCanvas(contentWidth, contentHeight)
+	c.Compose(lipgloss.NewCompositor(
+		lipgloss.NewLayer(strings.Join(lines, "\n")),
+		lipgloss.NewLayer(card).X(max(0, (contentWidth-w)/2)).Y(max(0, (contentHeight-h)/2)).Z(1),
+	))
+	return c.Render()
 }
 
 // confirmDialog asks a destructive yes/no question: the prompt, what it affects, and the buttons.
