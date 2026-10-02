@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -369,6 +370,40 @@ func TestMessageDetailsFifo(t *testing.T) {
 		if !strings.Contains(view, want) {
 			t.Errorf("expected the fifo attributes to show %q", want)
 		}
+	}
+}
+
+func TestMessageAttributesScroll(t *testing.T) {
+	m := detailsModel(t)
+	m.state.queueMessageDetails.message = kue.Message{MessageID: "many", Body: "{}", MessageAttributes: map[string]string{}}
+	for i := range 60 {
+		m.state.queueMessageDetails.message.MessageAttributes[fmt.Sprintf("attr_%02d", i)] = "value"
+	}
+	m, _ = m.QueueMessageDetailsSwitchPage()
+	d := m.state.queueMessageDetails
+	if !d.fieldsOverflow() {
+		t.Fatal("expected 60 attributes to be more than fit")
+	}
+	if strings.Contains(ansi.Strip(m.render()), "attr_59") {
+		t.Fatal("expected the last attribute below the panel before scrolling")
+	}
+	m, _ = update(t, m, press("tab"), press("G"))
+	if !m.state.queueMessageDetails.onFields || m.state.queueMessageDetails.fields.YOffset() == 0 {
+		t.Fatal("expected tab to give the attributes the keys")
+	}
+	if !strings.Contains(ansi.Strip(m.render()), "attr_59") {
+		t.Error("expected the last attribute on screen once scrolled down")
+	}
+	m, _ = update(t, m, press("tab"))
+	if m.state.queueMessageDetails.onFields {
+		t.Error("expected tab again to give the body the keys")
+	}
+
+	// Without more attributes than fit, tab leaves the keys with the body.
+	m = detailsModel(t)
+	m, _ = update(t, m, press("enter"), press("tab"))
+	if m.state.queueMessageDetails.onFields {
+		t.Error("expected tab to do nothing when the attributes fit")
 	}
 }
 

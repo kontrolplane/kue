@@ -30,7 +30,7 @@ The header shows the aws profile, region, account and endpoint in use, and the n
 - `←`, `h`: left
 - `g`, `G`: first/last row, top/bottom of a message body
 - `pgup`, `pgdn`: page up/down
-- `tab`, `shift+tab`: next/previous field
+- `tab`, `shift+tab`: next/previous field; on a message, scroll its attributes rather than its body when there are more than fit
 - `ctrl+n`: create queue/send message
 - `ctrl+d`: delete queue/message
 - `ctrl+p`: purge queue

@@ -758,6 +758,12 @@ func (m model) shortHelp() [][2]string {
 		return [][2]string{{"q", "back"}}
 	case m.page == queueRedrive:
 		return confirmHelp
+	case m.page == queueMessageDetails && m.state.queueMessageDetails.fieldsOverflow():
+		panel := "attributes"
+		if m.state.queueMessageDetails.onFields {
+			panel = "body"
+		}
+		return slices.Insert(slices.Clone(shortHelp[m.page]), 1, [2]string{"tab", panel})
 	}
 	return shortHelp[m.page]
 }
