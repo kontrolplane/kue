@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -192,21 +193,24 @@ func (m model) getFilteredMessages() []kue.Message {
 	return filterBy(d.messages, d.filterText, messageMatches)
 }
 
-func bodyPreview(body string) cell {
+// bodyPreview renders a body on one line, tinted, with the text the filter matches set apart.
+func bodyPreview(body string, matches *regexp.Regexp) cell {
 	if body == "" {
 		return text("empty", styles.ToneFaint)
 	}
-	return text(preview(body, 200), styles.ToneBody)
+	return markMatches(tint(preview(body, 200)), matches)
 }
 
 func (m model) updateMessagesTable() model {
 	d := &m.state.queueDetails
 	var rows []tableRow
+	matches := filterMatches(d.filterText)
 	for _, msg := range m.getFilteredMessages() {
 		id := cell{styles.S(msg.MessageID, styles.ToneMuted)}
 		if d.selectedItems[msg.MessageID] {
 			id = cell{styles.S("● ", styles.ToneAccent), styles.S(msg.MessageID, styles.ToneText)}
 		}
+		id = markMatches(id, matches)
 		receives := atoi(msg.ReceiveCount)
 		receivesTone := styles.ToneBody
 		if receives > 1 {
@@ -214,7 +218,7 @@ func (m model) updateMessagesTable() model {
 		}
 		rows = append(rows, tableRow{
 			id,
-			bodyPreview(msg.Body),
+			bodyPreview(msg.Body, matches),
 			lastActivity(parseTime(msg.SentTimestamp)),
 			tableCount(receives, receivesTone),
 			text(formatBytes(uint64(len(msg.Body))), styles.ToneMuted),
