@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/kontrolplane/kue/pkg/tui/styles"
 )
 
@@ -94,5 +96,40 @@ func TestBodyPreviewTintsAndMarks(t *testing.T) {
 	}
 	if c := bodyPreview(body, nil); slices.ContainsFunc(c, func(s styles.Span) bool { return s.Bold }) {
 		t.Errorf("without a filter nothing is set apart: %s", spans(c))
+	}
+}
+
+func TestWrapLineKeepsWordsWhole(t *testing.T) {
+	line := `{"customer":"cus_4419","duration_ms":113,"msg":"request served"} and a verylongwordthatdoesnotfitanywhere`
+	pieces := wrapLine(line, 24)
+	if strings.Join(pieces, "") != line {
+		t.Fatalf("pieces %q lost text", pieces)
+	}
+	want := []string{`{"customer":"cus_4419",`, `"duration_ms":113,`, `"msg":"request served"} `,
+		// No break in the second half: cut where the piece is full rather than leave it short.
+		`and a verylongwordthatdo`, `esnotfitanywhere`}
+	if strings.Join(pieces, "|") != strings.Join(want, "|") {
+		t.Errorf("pieces\n%q\nwant\n%q", pieces, want)
+	}
+	for _, p := range wrapLine("日本語のログ日本語のログ", 5) {
+		if w := textWidth(p); w > 5 {
+			t.Errorf("piece %q is %d wide", p, w)
+		}
+	}
+}
+
+func TestBodyWrapsBetweenWords(t *testing.T) {
+	p := newPayloadText(`{"note":"the customer asked to deliver the parcel to the neighbour at number twelve"}`)
+	lines := strings.Split(ansi.Strip(p.render(40)), "\n")
+	for _, l := range lines {
+		if w := ansi.StringWidth(l); w > 40 {
+			t.Errorf("line %q is %d wide", l, w)
+		}
+	}
+	if got, want := strings.Join(lines, ""), strings.ReplaceAll(p.text, "\n", ""); got != want {
+		t.Errorf("wrapping changed the body:\n%q\nwant\n%q", got, want)
+	}
+	if !strings.HasSuffix(lines[1], " ") {
+		t.Errorf("expected the break after a word, got %q", lines)
 	}
 }
