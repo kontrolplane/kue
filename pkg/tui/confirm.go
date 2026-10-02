@@ -115,7 +115,13 @@ func overlay(page, card string) string {
 		lipgloss.NewLayer(strings.Join(lines, "\n")),
 		lipgloss.NewLayer(card).X(max(0, (contentWidth-w)/2)).Y(max(0, (contentHeight-h)/2)).Z(1),
 	))
-	return c.Render()
+	// The canvas leaves out the blank cells at the end of a line, and the frame centres a line
+	// shorter than the content area, which would move the card off the middle.
+	out := strings.Split(c.Render(), "\n")
+	for i, l := range out {
+		out[i] = l + strings.Repeat(" ", max(0, contentWidth-styledWidth(l)))
+	}
+	return strings.Join(out, "\n")
 }
 
 // confirmDialog asks a destructive yes/no question: the prompt, what it affects, and the buttons.
