@@ -61,11 +61,13 @@ func queueType(queues []kue.Queue, q kue.Queue) cell {
 func (m model) updateQueueOverviewTable() model {
 	o := &m.state.queueOverview
 	var rows []tableRow
+	matches := filterMatches(o.filterText)
 	for _, q := range m.getFilteredQueues() {
 		name := cell{styles.B(q.Name, styles.ToneText)}
 		if o.selectedItems[q.Url] {
 			name = cell{styles.S("● ", styles.ToneAccent), styles.B(q.Name, styles.ToneText)}
 		}
+		name = markMatches(name, matches)
 		rows = append(rows, tableRow{
 			name,
 			queueType(o.queues, q),

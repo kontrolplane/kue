@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
@@ -24,6 +25,8 @@ type queueMessageDetailsState struct {
 	body      payloadText
 	kind      string // what the body is and its size, for the section header
 	viewport  viewport.Model
+	fields    viewport.Model // the queue, message and attributes, which can be more than fit
+	onFields  bool           // the keys scroll the fields rather than the body
 }
 
 func (m model) QueueMessageDetailsSwitchPage() (model, tea.Cmd) {
@@ -33,24 +36,49 @@ func (m model) QueueMessageDetailsSwitchPage() (model, tea.Cmd) {
 	d.kind = payloadKind(d.message.Body)
 	d.viewport = viewport.New(viewport.WithWidth(rightContentWidth), viewport.WithHeight(detailsViewportHeight()))
 	d.viewport.SetContent(d.body.render(rightContentWidth))
+	d.fields = viewport.New(viewport.WithWidth(leftContentWidth), viewport.WithHeight(contentHeight))
+	d.fields.SetContent(d.renderFields())
+	d.onFields = false
 	return m.SwitchPage(queueMessageDetails), nil
 }
 
-// resizeBody wraps the body again at the current width, keeping the scroll position.
+// resizeBody wraps the body again at the current width, keeping the scroll positions.
 func (d *queueMessageDetailsState) resizeBody() {
 	offset := d.viewport.YOffset()
 	d.viewport.SetWidth(rightContentWidth)
 	d.viewport.SetHeight(detailsViewportHeight())
 	d.viewport.SetContent(d.body.render(rightContentWidth))
 	d.viewport.SetYOffset(offset)
+	offset = d.fields.YOffset()
+	d.fields.SetWidth(leftContentWidth)
+	d.fields.SetHeight(contentHeight)
+	d.fields.SetContent(d.renderFields())
+	d.fields.SetYOffset(offset)
+	if !d.fieldsOverflow() {
+		d.onFields = false
+	}
+}
+
+// fieldsOverflow reports whether the fields are more than the panel shows, so it scrolls.
+func (d queueMessageDetailsState) fieldsOverflow() bool {
+	return d.fields.TotalLineCount() > d.fields.Height()
 }
 
 func (m model) QueueMessageDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 	var cmd tea.Cmd
 	d := &m.state.queueMessageDetails
+	// The fields hold how long ago the message was sent, which changes while it is open.
+	d.fields.SetContent(d.renderFields())
+	scrolled := &d.viewport
+	if d.onFields {
+		scrolled = &d.fields
+	}
 
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch {
+		case key.Matches(keyMsg, m.keys.NextField, m.keys.PrevField):
+			d.onFields = !d.onFields && d.fieldsOverflow()
+			return m, nil
 		case key.Matches(keyMsg, m.keys.CopyToClipboard):
 			return m, commands.CopyToClipboard(d.message.Body)
 		case key.Matches(keyMsg, m.keys.Delete):
@@ -66,15 +94,15 @@ func (m model) QueueMessageDetailsUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case key.Matches(keyMsg, m.keys.Quit, m.keys.Back):
 			return m.queueDetailsGoBack()
 		case key.Matches(keyMsg, m.keys.Top):
-			d.viewport.GotoTop()
+			scrolled.GotoTop()
 			return m, nil
 		case key.Matches(keyMsg, m.keys.Bottom):
-			d.viewport.GotoBottom()
+			scrolled.GotoBottom()
 			return m, nil
 		}
 	}
 
-	d.viewport, cmd = d.viewport.Update(msg)
+	*scrolled, cmd = scrolled.Update(msg)
 	return m, cmd
 }
 
@@ -84,8 +112,8 @@ var systemAttributes = []string{
 	"MessageGroupId", "MessageDeduplicationId", "SequenceNumber",
 }
 
-func (m model) QueueMessageDetailsView() string {
-	d := m.state.queueMessageDetails
+// renderFields renders the left panel: the queue, the message, its fifo details and attributes.
+func (d queueMessageDetailsState) renderFields() string {
 	msg := d.message
 
 	kind := "standard"
@@ -104,8 +132,19 @@ func (m model) QueueMessageDetailsView() string {
 		receives.Tone = styles.ToneWarning
 	}
 
+	title := styles.Fg(styles.ToneText).Bold(true)
+	if d.onFields {
+		title = styles.Fg(styles.ToneAccent).Bold(true)
+	}
+	meta := ""
+	if d.fieldsOverflow() {
+		meta = styles.Faint("tab scrolls")
+		if d.onFields {
+			meta = styles.Faint(fmt.Sprintf("%d%%", int(d.fields.ScrollPercent()*100)))
+		}
+	}
 	left := []string{
-		panelSection("queue", true, leftContentWidth),
+		styles.SectionHeaderWith(title.Render("queue"), meta, leftContentWidth),
 		panelRowSpans("name", styles.S(d.queueName, styles.ToneText)),
 		panelRow("type", kind),
 		"",
@@ -132,7 +171,7 @@ func (m model) QueueMessageDetailsView() string {
 	}
 
 	left = append(left, "", styles.SectionHeaderWith(styles.Bold("attributes"), styles.Faint(fmt.Sprint(len(msg.MessageAttributes))), leftContentWidth))
-	left = append(left, attributeRows(msg.MessageAttributes, contentHeight-len(left)-2)...)
+	left = append(left, attributeRows(msg.MessageAttributes)...)
 
 	var system []string
 	for name := range msg.Attributes {
@@ -148,23 +187,34 @@ func (m model) QueueMessageDetailsView() string {
 		}
 	}
 
+	return strings.Join(left, "\n")
+}
+
+func (m model) QueueMessageDetailsView() string {
+	d := m.state.queueMessageDetails
+	fields := d.fields
+	fields.SetContent(d.renderFields())
+
 	vp := d.viewport
 	meta := d.kind
 	if vp.TotalLineCount() > vp.Height() {
 		meta += fmt.Sprintf(" · %d%%", int(vp.ScrollPercent()*100))
 	}
+	title := styles.Fg(styles.ToneText).Bold(true)
+	if !d.onFields && d.fieldsOverflow() {
+		title = styles.Fg(styles.ToneAccent).Bold(true)
+	}
 	right := lipgloss.JoinVertical(lipgloss.Left,
-		styles.SectionHeaderWith(styles.Bold("body"), styles.Faint(meta), rightContentWidth),
+		styles.SectionHeaderWith(title.Render("body"), styles.Faint(meta), rightContentWidth),
 		"",
 		vp.View(),
 	)
 
-	return splitPanels(lipgloss.JoinVertical(lipgloss.Left, left...), right)
+	return splitPanels(fields.View(), right)
 }
 
-// attributeRows lists the message attributes on one line each, in at most rows lines, with the
-// ones past them counted.
-func attributeRows(attrs map[string]string, rows int) []string {
+// attributeRows lists the message attributes on one line each.
+func attributeRows(attrs map[string]string) []string {
 	if len(attrs) == 0 {
 		return []string{panelRowSpans("", styles.S("no attributes", styles.ToneFaint))}
 	}
@@ -174,16 +224,9 @@ func attributeRows(attrs map[string]string, rows int) []string {
 	}
 	slices.Sort(names)
 
-	shown := names
-	if rows = max(rows, 1); len(names) > rows {
-		shown = names[:rows-1]
-	}
-	lines := make([]string, 0, len(shown)+1)
-	for _, name := range shown {
+	lines := make([]string, 0, len(names))
+	for _, name := range names {
 		lines = append(lines, panelRow(name, attrs[name]))
-	}
-	if more := len(names) - len(shown); more > 0 {
-		lines = append(lines, panelRowSpans("", styles.S(fmt.Sprintf("+%d more attributes", more), styles.ToneFaint)))
 	}
 	return lines
 }

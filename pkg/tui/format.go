@@ -225,7 +225,11 @@ func (p payloadText) render(width int) string {
 	}
 	text := p.text
 	if width > 0 {
-		text = ansi.Hardwrap(text, width, true)
+		lines := strings.Split(text, "\n")
+		for i, line := range lines {
+			lines[i] = strings.Join(wrapLine(line, width), "\n")
+		}
+		text = strings.Join(lines, "\n")
 	}
 	if p.json {
 		return highlightJSON(text)
@@ -233,6 +237,32 @@ func (p payloadText) render(width int) string {
 	var b strings.Builder
 	paintLines(&b, styles.ToneBody, text)
 	return b.String()
+}
+
+// wrapLine breaks a line into pieces of at most width columns, after a space or a comma where one
+// is in the second half of a piece, so words and values stay whole, and anywhere otherwise. The
+// pieces hold every byte of the line, in order, so the colours of JSON stay on their tokens.
+func wrapLine(s string, width int) []string {
+	if textWidth(s) <= width {
+		return []string{s}
+	}
+	var out []string
+	for textWidth(s) > width {
+		head := truncateText(s, width)
+		at := len(head)
+		if i := strings.LastIndexAny(head, " ,"); i >= len(head)/2 {
+			at = i + 1
+		}
+		if at == 0 {
+			at = len(s) // a rune wider than the line
+		}
+		out = append(out, s[:at])
+		s = s[at:]
+	}
+	if s != "" {
+		out = append(out, s)
+	}
+	return out
 }
 
 // paintLines writes s in tone, styling each line on its own so a wrapped token keeps its colour

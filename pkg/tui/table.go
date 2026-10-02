@@ -274,11 +274,10 @@ func pad(n int, bg color.Color) string {
 	if n <= 0 {
 		return ""
 	}
-	style := lipgloss.NewStyle()
-	if bg != nil {
-		style = style.Background(bg)
+	if bg == nil {
+		return strings.Repeat(" ", n)
 	}
-	return style.Render(strings.Repeat(" ", n))
+	return sgr(nil, false, bg) + strings.Repeat(" ", n) + ansi.ResetStyle
 }
 
 // renderCell truncates the spans to the column width and aligns them. Content that does not fit
@@ -286,7 +285,7 @@ func pad(n int, bg color.Color) string {
 func renderCell(c cell, col column, bg color.Color) string {
 	total := 0
 	for _, s := range c {
-		total += ansi.StringWidth(s.Text)
+		total += textWidth(s.Text)
 	}
 	budget := col.width
 	cut := total > col.width
@@ -302,9 +301,9 @@ func renderCell(c cell, col column, bg color.Color) string {
 			break
 		}
 		txt := s.Text
-		if w := ansi.StringWidth(txt); used+w > budget {
-			txt = ansi.Truncate(txt, budget-used, "")
-			used += ansi.StringWidth(txt)
+		if w := textWidth(txt); used+w > budget {
+			txt = truncateText(txt, budget-used)
+			used += textWidth(txt)
 		} else {
 			used += w
 		}
